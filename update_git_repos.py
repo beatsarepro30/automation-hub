@@ -2,7 +2,7 @@ import os
 import subprocess
 from datetime import datetime
 
-# 🔧 Change this to the root directory where all your repos may be located
+# 🔧 Set your root directory containing Git repositories
 REPO_ROOT = r"C:\Users\YourUsername\Projects"
 LOG_FILE = os.path.join(REPO_ROOT, "git_update_log.txt")
 
@@ -28,27 +28,43 @@ def find_git_repos(root_path):
     for dirpath, dirnames, _ in os.walk(root_path):
         if is_git_repo(dirpath):
             git_repos.add(dirpath)
-            # Prevent walking into this repo's subfolders (optimization)
-            dirnames.clear()
+            dirnames.clear()  # Stop walking into Git repo subfolders
     return sorted(git_repos)
 
-def log_message(message):
-    """Append a message to the log file."""
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(message + "\n")
+def ensure_log_file_exists():
+    """Ensure the log file and its directory exist."""
+    os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+    if not os.path.exists(LOG_FILE):
+        with open(LOG_FILE, "w", encoding="utf-8") as f:
+            f.write("")
+
+def prepend_to_log(new_log):
+    """Prepend new_log (string) to the beginning of the log file."""
+    ensure_log_file_exists()
+    try:
+        with open(LOG_FILE, "r", encoding="utf-8") as f:
+            old_content = f.read()
+    except FileNotFoundError:
+        old_content = ""
+
+    with open(LOG_FILE, "w", encoding="utf-8") as f:
+        f.write(new_log + "\n" + old_content)
 
 def main():
-    log_message(f"\n=== Git Update Run: {datetime.now()} ===")
+    log_lines = [f"=== Git Update Run: {datetime.now()} ==="]
+
     repos = find_git_repos(REPO_ROOT)
-
     if not repos:
-        log_message("❌ No Git repositories found.")
-        return
+        log_lines.append("❌ No Git repositories found.")
+    else:
+        for repo in repos:
+            log_lines.append(f"\n🔄 Updating repo: {repo}")
+            output = update_repo(repo).strip()
+            log_lines.append(output)
 
-    for repo in repos:
-        log_message(f"\n🔄 Updating repo: {repo}")
-        output = update_repo(repo)
-        log_message(output.strip())
+    # Combine the new log section and prepend to the file
+    full_log_block = "\n".join(log_lines) + "\n"
+    prepend_to_log(full_log_block)
 
 if __name__ == "__main__":
     main()
