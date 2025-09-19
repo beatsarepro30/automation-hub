@@ -1,0 +1,1 @@
+* * * * * echo "$(date): Cron job executed" >> ~/output.txt

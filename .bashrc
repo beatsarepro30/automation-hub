@@ -1,0 +1,272 @@
+#######################
+# Custom Bashrc Logic #
+#######################
+# If not running interactively, don't do anything
+[[ -n $PS1 ]] || return
+
+# Set environment
+export HISTCONTROL='ignoredups'
+export HISTSIZE=5000
+export HISTFILESIZE=5000
+
+export FZF_DEFAULT_OPTS="--height 40% --layout=reverse --border --nth=1.. --query="
+
+export PATH="$PATH:$HOME/bin"
+
+shopt -s checkwinsize # auto-update terminal size
+shopt -s extglob      # enable extended glob patterns
+
+# Generic Aliases
+# https://vikaskyadav.github.io/awesome-bash-alias/
+# Clear
+alias c="clear"
+alias cl="clear"
+alias ckear="clear"
+alias clr="clear"
+# Change Directory
+alias .="cd .."
+alias ..="cd ../.."
+alias ...="cd ../../.."
+alias ....="cd ../../../.."
+alias .....="cd ../../../../.."
+# Docker
+dock-run() { sudo docker run -i -t --privileged $@ ;}
+dock-exec() { sudo docker exec -i -t $@ /bin/bash ;}
+dock-log() { sudo docker logs --tail=all -f $@ ;}
+dock-port() { sudo docker port $@ ;}
+dock-vol() { sudo docker inspect --format '{{ .Volumes }}' $@ ;}
+dock-ip() { sudo docker inspect --format '{{ .NetworkSettings.IPAddress }}' $@ ;}
+dock-rmc() { sudo docker rm sudo docker ps -qa --filter 'status=exited' ;}
+dock-rmi() { sudo docker rmi -f sudo docker images | grep '^<none>' | awk '{print $3}' ;}
+dock-stop() { sudo docker stop $(docker ps -a -q); }
+dock-rm() { sudo docker rm $(docker ps -a -q); }
+# Git commands
+alias gs="git status"
+alias gst="git status -sb"
+alias gl="git log"
+alias ga="git add"
+alias gaa="git add -A"
+alias gal="git add ."
+alias gall="git add ."
+alias gca="git commit -a"
+alias gc="git commit -m"
+alias gcot="git checkout"
+alias gchekout="git checkout"
+alias gchckout="git checkout"
+alias gckout="git checkout"
+alias go="git push -u origin"
+alias gsh='git stash'
+alias gw='git whatchanged'
+alias gitlg="git log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit"
+alias nah="git clean -df && git checkout -- ."
+# History commands
+alias h="history"
+alias h1="history 10"
+alias h2="history 20"
+alias h3="history 30"
+alias hgrep='history | grep'
+# List commands
+alias l="ls"
+alias l='ls -lAh'
+alias ls="ls -a"
+alias la="ls -a"
+alias ll="ls -al"
+# Confirmation
+alias mv='mv -i'
+alias cp='cp -i'
+alias ln='ln -i'
+alias rm='rm -I --preserve-root'
+
+##################
+# Enable colours #
+##################
+alias grep='grep --color=always'
+# Enable color support of ls
+if ls --color=auto &>/dev/null; then
+	alias ls='ls -p --color=auto'
+else
+	alias ls='ls -p -G'
+fi
+
+# Standard 8-color ANSI codes
+RED="\033[0;31m"
+GREEN="\033[0;32m"
+YELLOW="\033[0;33m"
+BLUE="\033[0;34m"
+MAGENTA="\033[0;35m"
+CYAN="\033[0;36m"
+WHITE="\033[0;37m"
+RESET="\033[0m"
+
+# Print a colorized diff
+colordiff() {
+    local red=$(tput setaf 1 2>/dev/null)
+    local green=$(tput setaf 2 2>/dev/null)
+    local cyan=$(tput setaf 6 2>/dev/null)
+    local reset=$(tput sgr0 2>/dev/null)
+
+    # Use diff -u for unified diff
+    diff -u "$@" | awk -v red="$red" -v green="$green" -v cyan="$cyan" -v reset="$reset" '
+    /^-/ { printf("%s%s\n", red, $0); next }
+    /^\+/ { printf("%s%s\n", green, $0); next }
+    /^@/ { printf("%s%s\n", cyan, $0); next }
+    { print $0 reset }
+    '
+
+    return "${PIPESTATUS[0]}"
+}
+alias diff='colordiff'
+
+##################
+# Custom Aliases #
+##################
+alias bashrc="code ~/.bashrc"
+# Git Aliases and Functions
+gmb() { # git main branch
+	local main
+	main=$(git symbolic-ref --short refs/remotes/origin/HEAD)
+	main=${main#origin/}
+	[[ -n $main ]] || return 1
+	echo "$main"
+}
+# Function to get current git branch
+git_branch() {
+    local branch
+    branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+    if [ -n "$branch" ]; then
+        echo " ${GREEN}($branch)${RESET}"  # cyan branch
+    fi
+}
+# Open current git repo (or specific file) in GitHub in default browser
+gho() {
+    local file=$1
+    local remote=${2:-origin}
+
+    # Get git info
+    local gr branch url
+    gr=$(git rev-parse --show-toplevel) || return 1
+    branch=$(git rev-parse --abbrev-ref HEAD) || return 1
+    url=$(git config --get "remote.$remote.url") || return 1
+
+    # Determine path relative to git root
+    local path=""
+    if [[ -n $file ]]; then
+        path=$(git ls-files --full-name "$file" 2>/dev/null)
+        if [[ -z $path ]]; then
+            echo "File '$file' not tracked in git" >&2
+            return 1
+        fi
+        path="/$path"
+    fi
+
+    # Extract GitHub username and repo name
+    local user repo a
+    IFS='/:@' read -ra a <<< "$url"
+    user=${a[-2]}
+    repo=${a[-1]%.git}
+
+    # Construct GitHub URL
+    local gh_url="https://github.com/$user/$repo/tree/$branch$path"
+    echo "$gh_url"
+
+    # Open in default browser (cross-platform)
+    if command -v xdg-open &>/dev/null; then
+        xdg-open "$gh_url" &>/dev/null
+    elif command -v open &>/dev/null; then
+        open "$gh_url"
+    elif command -v start &>/dev/null; then
+        start "" "$gh_url"
+    else
+        echo "Could not detect a command to open a browser" >&2
+        return 1
+    fi
+}
+gro() {
+    git fetch
+    git reset --hard "origin/$(git branch --show-current)"
+}
+alias grm="git fetch && git reset --hard origin/${gmb}"
+alias grd="git fetch && git reset --hard origin/develop"
+alias gp="git push"
+alias gpf="git push -f"
+alias gch="git fetch --all && git checkout"
+alias ga="git add -A"
+alias gd="git diff"
+alias cob="function _cob() { git checkout -b $1 && git push -u origin $1; }; _cob"
+# Terraform Aliases
+alias tf="terraform"
+alias tfi="terraform init --backend-config=backend.hcl"
+alias tfp="terraform plan"
+alias tfip="tfi && tfp"
+# Windows aliases
+alias ex="explorer.exe"
+
+#####################
+# Custom PS1 Prompt #
+#####################
+set_prompt() {
+    local ret=$?
+    local exit_str=""
+    if (( ret != 0 )); then
+        exit_str="${RED}($ret)${RESET} "  # red exit code
+    fi
+
+    PS1="${exit_str}${CYAN}\w${RESET}$(git_branch)${MAGENTA} \$ ${RESET}"
+}
+
+PROMPT_COMMAND=set_prompt
+PROMPT_DIRTRIM=6
+
+####################################
+# Custom PATH Management Functions #
+####################################
+
+# Show PATH with $HOME replaced by ~
+path_show() {
+    local p dir newpath=""
+    IFS=: read -ra p <<< "$PATH"
+    for dir in "${p[@]}"; do
+        # Replace $HOME at the start with ~
+        if [[ $dir == $HOME* ]]; then
+            dir="~${dir#$HOME}"
+        fi
+        newpath+="$dir:"
+    done
+    # Remove trailing colon
+    newpath=${newpath%:}
+    echo "$newpath"
+}
+
+# Clean PATH: remove duplicates and non-existent directories
+path_clean() {
+    local dir newpath=""
+    local seen=()
+
+    # Split PATH into array by ':'
+    IFS=: read -ra dirs <<< "$PATH"
+
+    for dir in "${dirs[@]}"; do
+        # Skip empty entries
+        [[ -z $dir ]] && continue
+
+        # Skip if directory doesn't exist
+        [[ ! -d $dir ]] && continue
+
+        # Skip if already seen
+        [[ " ${seen[*]} " == *" $dir "* ]] && continue
+
+        # Add to new path and mark as seen
+        newpath+="$dir:"
+        seen+=("$dir")
+    done
+
+    # Remove trailing colon
+    PATH=${newpath%:}
+}
+
+#######################
+# Final configuration #
+#######################
+path_clean
+# Set up fzf key bindings and fuzzy completion
+eval "$(fzf --bash)"
