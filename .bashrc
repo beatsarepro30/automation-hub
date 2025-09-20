@@ -122,6 +122,15 @@ alias diff='colordiff'
 ##################
 alias bashrc="code ~/.bashrc"
 # Git Aliases and Functions
+gcm() {
+    # Get current branch
+    local branch_part
+    branch_part=$(git rev-parse --abbrev-ref HEAD | awk -F/ '{print $NF}')
+
+    # Combine branch part with your commit message
+    git commit -am "$branch_part - $*"
+}
+alias gc="gcm"
 gmb() { # git main branch
 	local main
 	main=$(git symbolic-ref --short refs/remotes/origin/HEAD)
@@ -192,7 +201,13 @@ alias gpf="git push -f"
 alias gch="git fetch --all && git checkout"
 alias ga="git add -A"
 alias gd="git diff"
-alias cob="function _cob() { git checkout -b $1 && git push -u origin $1; }; _cob"
+cob() {
+    if [ -z "$1" ]; then
+        echo "Usage: cob <branch-name>"
+        return 1
+    fi
+    git checkout -b "$1" && git push -u origin "$1"
+}
 # Terraform Aliases
 alias tf="terraform"
 alias tfi="terraform init --backend-config=backend.hcl"
@@ -208,10 +223,10 @@ set_prompt() {
     local ret=$?
     local exit_str=""
     if (( ret != 0 )); then
-        exit_str="${RED}($ret)${RESET} "  # red exit code
+        exit_str="${RED}($ret)${RESET}"  # red exit code
     fi
 
-    PS1="${exit_str}${CYAN}\w${RESET}$(git_branch)${MAGENTA} \$ ${RESET}"
+    PS1="${CYAN}\w${RESET}$(git_branch) ${exit_str}${MAGENTA}\$ ${RESET}"
 }
 
 PROMPT_COMMAND=set_prompt
