@@ -75,7 +75,7 @@ echo
 
 # --- Recursively find git repos under PARENT_DIR without process substitution ---
 TMP_FILE=$(mktemp)
-find "$PARENT_DIR" -type d -name ".git" 2>/dev/null > "$TMP_FILE"
+find -L "$PARENT_DIR" -type d -name ".git" 2>/dev/null > "$TMP_FILE"
 
 while IFS= read -r git_dir; do
     repo_dir=$(dirname "$git_dir")
