@@ -1,7 +1,7 @@
 set -euo pipefail
 
 # === Config ===
-INSTALL_DIR="$HOME/bin"   # Directory to install executables
+INSTALL_DIR="$HOME/.local/bin"   # Directory to install executables
 FZF_REPO="junegunn/fzf"
 JQ_REPO="jqlang/jq"
 
@@ -104,3 +104,12 @@ install_command_if_missing "jq" "$JQ_REPO"
 install_command_if_missing "fzf" "$FZF_REPO" "fzf-.*-${OS}_${ARCH}"
 
 echo "Installation complete. You may need to restart your shell or run 'source ~/.bashrc' to update PATH."
+
+# === Ensure ~/.local/bin is in PATH in ~/.bashrc ===
+INJECT_LINE='export PATH="$INSTALL_DIR:$PATH"'
+
+# Load reusable functions
+source ./bashrc_utils.sh
+
+# Inject ~/.local/bin into PATH
+inject_bashrc_line "$INJECT_LINE" "local-bin"

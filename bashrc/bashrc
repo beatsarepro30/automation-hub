@@ -11,7 +11,7 @@ export HISTFILESIZE=5000
 
 export FZF_DEFAULT_OPTS="--height 40% --layout=reverse --border --nth=1.. --query="
 
-export PATH="$PATH:$HOME/bin"
+export PATH="$PATH:$HOME/.local/bin"
 
 shopt -s checkwinsize # auto-update terminal size
 shopt -s extglob      # enable extended glob patterns
@@ -120,7 +120,7 @@ alias diff='colordiff'
 ##################
 # Custom Aliases #
 ##################
-alias bashrc="code ~/.bashrc"
+alias bashrc="code ~/.bashrc" #Fix
 # Git Aliases and Functions
 gcm() {
     # Get current branch
@@ -251,6 +251,7 @@ path_show() {
     newpath=${newpath%:}
     echo "$newpath"
 }
+alias show_path="path_show"
 
 # Clean PATH: remove duplicates and non-existent directories
 path_clean() {
@@ -284,4 +285,6 @@ path_clean() {
 #######################
 path_clean
 # Set up fzf key bindings and fuzzy completion
-eval "$(fzf --bash)"
+if command -v fzf >/dev/null 2>&1; then
+    eval "$(fzf --bash)"
+fi
