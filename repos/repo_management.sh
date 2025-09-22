@@ -77,8 +77,7 @@ echo
 find_git_repos() {
     local dir="$1"
     local sub
-    # Normalize path to remove trailing slash
-    dir="${dir%/}"
+    dir="${dir%/}"  # Normalize path
 
     if [ -d "$dir/.git" ]; then
         echo "$dir"
@@ -86,11 +85,14 @@ find_git_repos() {
 
     for sub in "$dir"/*/; do
         [ -d "$sub" ] || continue
-        # Remove trailing slash for consistent output
-        sub="${sub%/}"
+        sub="${sub%/}"  # Normalize path
         find_git_repos "$sub"
     done
 }
+
+# Store the list of git repos in a temporary file
+TMP_REPOS=$(mktemp)
+find_git_repos "$PARENT_DIR" > "$TMP_REPOS"
 
 while IFS= read -r repo_dir; do
     relative_path=${repo_dir#"$PARENT_DIR/"}
@@ -111,7 +113,9 @@ while IFS= read -r repo_dir; do
         echo "Deleting commented out repo: $(print_path "$repo_dir")"
         rm -rf "$repo_dir"
     fi
-done < <(find_git_repos "$PARENT_DIR")
+done < "$TMP_REPOS"
+
+rm -f "$TMP_REPOS"
 
 # --- Clone or update active repos only ---
 while IFS= read -r line || [ -n "$line" ]; do
@@ -138,8 +142,11 @@ done < "$REPOS_FILE"
 
 # --- Remove any empty directories that do NOT contain .git ---
 echo "Removing empty directories (excluding git repos) under $(print_path "$PARENT_DIR")..."
+TMP_EMPTY=$(mktemp)
+find "$PARENT_DIR" -type d -empty > "$TMP_EMPTY"
 while IFS= read -r empty_dir; do
     rmdir "$empty_dir" 2>/dev/null || true
-done < <(find "$PARENT_DIR" -type d -empty)
+done < "$TMP_EMPTY"
+rm -f "$TMP_EMPTY"
 
 echo "Cleanup complete!"
