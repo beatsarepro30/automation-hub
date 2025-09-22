@@ -60,8 +60,14 @@ mkdir -p "$NEW_BACKUP"
 # REMOVE OLD BACKUPS
 # ----------------------------
 MAX_BACKUPS=3
-mapfile -t backups < <(ls -1dt "$DEST"/backup_20* 2>/dev/null | sort)
+backups=()  # Initialize array to avoid unbound variable
 
+# Find backup directories safely, sorted oldest first
+while IFS= read -r -d $'\0' dir; do
+    backups+=("$dir")
+done < <(find "$DEST" -maxdepth 1 -type d -name 'backup_20*' -print0 | sort -z)
+
+# Delete oldest backups if exceeding MAX_BACKUPS
 if [ "${#backups[@]}" -gt "$MAX_BACKUPS" ]; then
     DEL_COUNT=$(( ${#backups[@]} - MAX_BACKUPS ))
     echo "Deleting $DEL_COUNT oldest backup(s)"
