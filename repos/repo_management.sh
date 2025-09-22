@@ -143,7 +143,7 @@ done < "$REPOS_FILE"
 # --- Remove any empty directories that do NOT contain .git ---
 echo "Removing empty directories (excluding git repos) under $(print_path "$PARENT_DIR")..."
 TMP_EMPTY=$(mktemp)
-find "$PARENT_DIR" -type d -empty > "$TMP_EMPTY"
+find -L "$PARENT_DIR" -type d -empty > "$TMP_EMPTY"
 while IFS= read -r empty_dir; do
     rmdir "$empty_dir" 2>/dev/null || true
 done < "$TMP_EMPTY"
