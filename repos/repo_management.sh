@@ -74,7 +74,8 @@ done
 echo
 
 # --- Recursively find git repos under PARENT_DIR ---
-find "$PARENT_DIR" -type d -name ".git" -prune -exec dirname {} \; | while IFS= read -r repo_dir; do
+find "$PARENT_DIR" -type d -name ".git" 2>/dev/null | while IFS= read -r git_dir; do
+    repo_dir=$(dirname "$git_dir")
     relative_path=${repo_dir#"$PARENT_DIR/"}
 
     # Add new repos to repos.yml if not listed
