@@ -112,16 +112,31 @@ install_command_if_missing() {
     download_path="$tmp_dir/$(basename "$url")"
     curl -fsSL -L "$url" -o "$download_path"
 
+    # === Extract based on archive type ===
     if [[ "$download_path" == *.zip ]]; then
         echo "Extracting $download_path..."
         unzip -q "$download_path" -d "$tmp_dir"
         exe_file=$(find "$tmp_dir" -type f \( -name "*.exe" -o -name "$cmd_name" \) | head -n1)
-        if [[ -z "$exe_file" ]]; then
-            echo "No executable found in $download_path" >&2
-            exit 1
-        fi
+    elif [[ "$download_path" == *.tar.gz ]] || [[ "$download_path" == *.tgz ]]; then
+        echo "Extracting $download_path..."
+        tar -xzf "$download_path" -C "$tmp_dir"
+        exe_file=$(find "$tmp_dir" -type f -name "$cmd_name" | head -n1)
+    elif [[ "$download_path" == *.tar.bz2 ]]; then
+        echo "Extracting $download_path..."
+        tar -xjf "$download_path" -C "$tmp_dir"
+        exe_file=$(find "$tmp_dir" -type f -name "$cmd_name" | head -n1)
+    elif [[ "$download_path" == *.tar ]]; then
+        echo "Extracting $download_path..."
+        tar -xf "$download_path" -C "$tmp_dir"
+        exe_file=$(find "$tmp_dir" -type f -name "$cmd_name" | head -n1)
     else
+        # For direct executables or unknown formats
         exe_file="$download_path"
+    fi
+
+    if [[ -z "$exe_file" ]]; then
+        echo "No executable found in $download_path" >&2
+        exit 1
     fi
 
     chmod +x "$exe_file"
