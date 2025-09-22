@@ -126,6 +126,6 @@ done < "$REPOS_FILE"
 
 # --- Remove any empty directories that do NOT contain .git ---
 echo "Removing empty directories (excluding git repos) under $(print_path "$PARENT_DIR")..."
-find "$PARENT_DIR" -type d -empty ! -path "*/.git*" -print -delete
+find -L "$PARENT_DIR" -type d -empty ! -path "*/.git*" -print -delete
 
 echo "Cleanup complete!"
