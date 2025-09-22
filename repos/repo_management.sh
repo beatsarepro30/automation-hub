@@ -15,6 +15,9 @@ if [ ! -f "$CONFIG_FILE" ]; then
         read -rp "Enter parent directory where repos will be nested: " PARENT_DIR
     done
 
+    # Replace leading ~ with $HOME for storage
+    PARENT_DIR="${PARENT_DIR/#\~/$HOME}"
+
     cat > "$CONFIG_FILE" <<EOF
 PARENT_DIR="$PARENT_DIR"
 EOF
@@ -25,10 +28,10 @@ fi
 # Load config
 source "$CONFIG_FILE"
 
-# --- Expand ~ in PARENT_DIR ---
+# --- Expand any ~ that might still exist (defensive) ---
 PARENT_DIR=$(eval echo "$PARENT_DIR")
 
-# --- Utility function to print paths with ~ ---
+# --- Utility function to print paths with ~ for readability ---
 print_path() {
     local path="$1"
     if [[ "$path" == "$HOME"* ]]; then
