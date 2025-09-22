@@ -59,7 +59,7 @@ mkdir -p "$NEW_BACKUP"
 # REMOVE OLD BACKUPS (robust)
 # ----------------------------
 MAX_BACKUPS=3
-backups=()  # Initialize array
+backups=()
 for dir in "$DEST"/backup_*; do
     [ -d "$dir" ] || continue
     backups+=("$dir")
@@ -102,7 +102,7 @@ echo "Backup: $NEW_BACKUP"
 echo "================================================================="
 
 # ----------------------------
-# SYNC PHASE (recursive, git-aware)
+# SYNC PHASE (recursive, git-aware, preserves symlinks/permissions)
 # ----------------------------
 echo
 echo "--- SYNC PHASE ---"
@@ -125,10 +125,10 @@ sync_dir() {
 
         if [ -d "$entry" ]; then
             sync_dir "$entry" "$dest_dir/$(basename "$entry")"
-        elif [ -f "$entry" ]; then
+        elif [ -f "$entry" ] || [ -L "$entry" ]; then
             echo "  Copying file: $rel_path"
             mkdir -p "$(dirname "$dest_dir/$(basename "$entry")")"
-            cp -p "$entry" "$dest_dir/$(basename "$entry")"
+            cp -a "$entry" "$dest_dir/$(basename "$entry")"
         fi
     done
 }
@@ -136,10 +136,10 @@ sync_dir() {
 sync_dir "$SRC" "$NEW_BACKUP"
 
 # ----------------------------
-# CLEANUP PHASE (recursive, git-aware)
+# CLEANUP PHASE (recursive, git-aware, remove empty directories)
 # ----------------------------
 echo
-echo "--- CLEANUP PHASE (removing stale files) ---"
+echo "--- CLEANUP PHASE (removing stale files & empty dirs) ---"
 
 cleanup_dir() {
     local backup_dir="$1"
@@ -163,6 +163,13 @@ cleanup_dir() {
             echo "  Keeping: $rel_path"
         fi
     done
+
+    # Remove the directory itself if it is now empty
+    if [ -d "$backup_dir" ] && [ -z "$(ls -A "$backup_dir")" ]; then
+        rel_dir="${backup_dir#$NEW_BACKUP/}"
+        echo "  Removing empty directory: $rel_dir"
+        rmdir "$backup_dir"
+    fi
 }
 
 cleanup_dir "$NEW_BACKUP" "$SRC"
