@@ -53,7 +53,6 @@ DEST="$(realpath "$SYNC_DEST")"
 # ----------------------------
 TODAY=$(date +%Y-%m-%d)
 NEW_BACKUP="$DEST/backup_$TODAY"
-
 mkdir -p "$NEW_BACKUP"
 
 # ----------------------------
@@ -61,17 +60,13 @@ mkdir -p "$NEW_BACKUP"
 # ----------------------------
 MAX_BACKUPS=3
 backups=()  # Initialize array
-
-# Safely iterate over existing backup directories
 for dir in "$DEST"/backup_*; do
     [ -d "$dir" ] || continue
     backups+=("$dir")
 done
 
-# Sort backups (oldest first)
 IFS=$'\n' backups=($(printf "%s\n" "${backups[@]}" | sort))
 
-# Delete oldest backups if exceeding MAX_BACKUPS
 if [ "${#backups[@]}" -gt "$MAX_BACKUPS" ]; then
     DEL_COUNT=$(( ${#backups[@]} - MAX_BACKUPS ))
     echo "Deleting $DEL_COUNT oldest backup(s)"
@@ -88,7 +83,6 @@ LOGFILE="$DEST/sync.log"
 MAX_LOG_SIZE=$((5 * 1024 * 1024))        # 5 MB max size
 TARGET_LOG_SIZE=$((MAX_LOG_SIZE / 2))    # Shrink to 50% of max size
 
-# Shrink log if it exceeds MAX_LOG_SIZE
 if [ -f "$LOGFILE" ]; then
     LOGSIZE=$(stat -c%s "$LOGFILE")
     if [ "$LOGSIZE" -gt "$MAX_LOG_SIZE" ]; then
@@ -108,64 +102,70 @@ echo "Backup: $NEW_BACKUP"
 echo "================================================================="
 
 # ----------------------------
-# SYNC PHASE
+# SYNC PHASE (recursive, git-aware)
 # ----------------------------
 echo
 echo "--- SYNC PHASE ---"
 
-# Function to decide if a directory contains a .git folder
-should_skip_git() {
-    local dir="$1"
-    [ -d "$dir/.git" ]
+sync_dir() {
+    local src_dir="$1"
+    local dest_dir="$2"
+
+    # Skip git repos
+    if [ -d "$src_dir/.git" ]; then
+        echo "  Skipping git repo: ${src_dir#$SRC/}"
+        return
+    fi
+
+    mkdir -p "$dest_dir"
+
+    for entry in "$src_dir"/*; do
+        [ -e "$entry" ] || continue
+        local rel_path="${entry#$SRC/}"
+
+        if [ -d "$entry" ]; then
+            sync_dir "$entry" "$dest_dir/$(basename "$entry")"
+        elif [ -f "$entry" ]; then
+            echo "  Copying file: $rel_path"
+            mkdir -p "$(dirname "$dest_dir/$(basename "$entry")")"
+            cp -p "$entry" "$dest_dir/$(basename "$entry")"
+        fi
+    done
 }
 
-export -f should_skip_git
-
-# Use find to traverse directories, pruning any that contain .git
-find "$SRC" -mindepth 1 -print0 |
-while IFS= read -r -d '' path; do
-    # Skip this path if it or any of its parent directories is a git repo
-    # Check relative path parts from the source root
-    skip=false
-    current="$path"
-    while [ "$current" != "$SRC" ]; do
-        if [ -d "$current/.git" ]; then
-            skip=true
-            break
-        fi
-        current=$(dirname "$current")
-    done
-    $skip && continue
-
-    rel_path="${path#$SRC/}"
-
-    if [ -f "$path" ]; then
-        echo "  Copying file: $rel_path"
-        mkdir -p "$(dirname "$NEW_BACKUP/$rel_path")"
-        cp -p "$path" "$NEW_BACKUP/$rel_path"
-    elif [ -d "$path" ]; then
-        echo "  Creating dir: $rel_path"
-        mkdir -p "$NEW_BACKUP/$rel_path"
-    fi
-done
+sync_dir "$SRC" "$NEW_BACKUP"
 
 # ----------------------------
-# CLEANUP PHASE
+# CLEANUP PHASE (recursive, git-aware)
 # ----------------------------
 echo
 echo "--- CLEANUP PHASE (removing stale files) ---"
 
-find "$NEW_BACKUP" -mindepth 1 -print0 |
-while IFS= read -r -d '' dpath; do
-    rel="${dpath#$NEW_BACKUP/}"
+cleanup_dir() {
+    local backup_dir="$1"
+    local src_dir="$2"
 
-    if [ ! -e "$SRC/$rel" ]; then
-        echo "  Removing stale: $rel"
-        rm -rf "$dpath"
-    else
-        echo "  Keeping: $rel"
-    fi
-done
+    for entry in "$backup_dir"/*; do
+        [ -e "$entry" ] || continue
+        local rel_path="${entry#$NEW_BACKUP/}"
+        local corresponding_src="$src_dir/${entry#$backup_dir/}"
+
+        if [ -d "$corresponding_src/.git" ]; then
+            continue
+        fi
+
+        if [ ! -e "$corresponding_src" ]; then
+            echo "  Removing stale: $rel_path"
+            rm -rf "$entry"
+        elif [ -d "$entry" ]; then
+            cleanup_dir "$entry" "$corresponding_src"
+        else
+            echo "  Keeping: $rel_path"
+        fi
+    done
+}
+
+cleanup_dir "$NEW_BACKUP" "$SRC"
 
 # ----------------------------
 # END HEADER
