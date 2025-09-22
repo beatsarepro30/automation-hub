@@ -73,12 +73,26 @@ for p in "${COMMENTED_PATHS[@]}"; do
 done
 echo
 
-# --- Recursively find git repos under PARENT_DIR without process substitution ---
-TMP_FILE=$(mktemp)
-find -L "$PARENT_DIR" -type d -name ".git" 2>/dev/null > "$TMP_FILE"
+# --- Recursively find git repos using pure bash ---
+find_git_repos() {
+    local dir="$1"
+    local sub
+    # Normalize path to remove trailing slash
+    dir="${dir%/}"
 
-while IFS= read -r git_dir; do
-    repo_dir=$(dirname "$git_dir")
+    if [ -d "$dir/.git" ]; then
+        echo "$dir"
+    fi
+
+    for sub in "$dir"/*/; do
+        [ -d "$sub" ] || continue
+        # Remove trailing slash for consistent output
+        sub="${sub%/}"
+        find_git_repos "$sub"
+    done
+}
+
+while IFS= read -r repo_dir; do
     relative_path=${repo_dir#"$PARENT_DIR/"}
 
     # Add new repos to repos.yml if not listed
@@ -97,9 +111,7 @@ while IFS= read -r git_dir; do
         echo "Deleting commented out repo: $(print_path "$repo_dir")"
         rm -rf "$repo_dir"
     fi
-done < "$TMP_FILE"
-
-rm -f "$TMP_FILE"
+done < <(find_git_repos "$PARENT_DIR")
 
 # --- Clone or update active repos only ---
 while IFS= read -r line || [ -n "$line" ]; do
@@ -126,6 +138,8 @@ done < "$REPOS_FILE"
 
 # --- Remove any empty directories that do NOT contain .git ---
 echo "Removing empty directories (excluding git repos) under $(print_path "$PARENT_DIR")..."
-find -L "$PARENT_DIR" -type d -empty ! -path "*/.git*" -print -delete
+while IFS= read -r empty_dir; do
+    rmdir "$empty_dir" 2>/dev/null || true
+done < <(find "$PARENT_DIR" -type d -empty)
 
 echo "Cleanup complete!"
