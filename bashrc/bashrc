@@ -121,7 +121,13 @@ alias diff='colordiff'
 # Custom Aliases #
 ##################
 alias .bashrc="code ~/.bashrc"
-alias bashrc='code $(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")bashrc'
+bashrc() {
+    local fullpath
+    fullpath="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+    # Replace $HOME with ~
+    fullpath="${fullpath/#$HOME/~}"
+    code "$fullpath"
+}
 # Git Aliases and Functions
 gcm() {
     # Get current branch
