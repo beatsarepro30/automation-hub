@@ -26,7 +26,7 @@ detect_os_arch() {
     echo "$os" "$arch"
 }
 
-read OS ARCH < <(detect_os_arch)
+read -r OS ARCH <<< "$(detect_os_arch)"
 
 mkdir -p "$INSTALL_DIR"
 
