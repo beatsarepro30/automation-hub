@@ -28,10 +28,10 @@ fi
 # Load config
 source "$CONFIG_FILE"
 
-# --- Expand any ~ that might still exist (defensive) ---
+# --- Expand any ~ that might still exist ---
 PARENT_DIR=$(eval echo "$PARENT_DIR")
 
-# --- Utility function to print paths with ~ for readability ---
+# --- Utility function to print paths with ~ ---
 print_path() {
     local path="$1"
     if [[ "$path" == "$HOME"* ]]; then
@@ -73,8 +73,11 @@ for p in "${COMMENTED_PATHS[@]}"; do
 done
 echo
 
-# --- Recursively find git repos under PARENT_DIR ---
-find "$PARENT_DIR" -type d -name ".git" 2>/dev/null | while IFS= read -r git_dir; do
+# --- Recursively find git repos under PARENT_DIR without process substitution ---
+TMP_FILE=$(mktemp)
+find "$PARENT_DIR" -type d -name ".git" 2>/dev/null > "$TMP_FILE"
+
+while IFS= read -r git_dir; do
     repo_dir=$(dirname "$git_dir")
     relative_path=${repo_dir#"$PARENT_DIR/"}
 
@@ -94,7 +97,9 @@ find "$PARENT_DIR" -type d -name ".git" 2>/dev/null | while IFS= read -r git_dir
         echo "Deleting commented out repo: $(print_path "$repo_dir")"
         rm -rf "$repo_dir"
     fi
-done
+done < "$TMP_FILE"
+
+rm -f "$TMP_FILE"
 
 # --- Clone or update active repos only ---
 while IFS= read -r line || [ -n "$line" ]; do
