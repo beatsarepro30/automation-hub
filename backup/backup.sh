@@ -57,15 +57,19 @@ NEW_BACKUP="$DEST/backup_$TODAY"
 mkdir -p "$NEW_BACKUP"
 
 # ----------------------------
-# REMOVE OLD BACKUPS
+# REMOVE OLD BACKUPS (robust)
 # ----------------------------
 MAX_BACKUPS=3
-backups=()  # Initialize array to avoid unbound variable
+backups=()  # Initialize array
 
-# Find backup directories safely, sorted oldest first
-while IFS= read -r -d $'\0' dir; do
+# Safely iterate over existing backup directories
+for dir in "$DEST"/backup_*; do
+    [ -d "$dir" ] || continue
     backups+=("$dir")
-done < <(find "$DEST" -maxdepth 1 -type d -name 'backup_20*' -print0 | sort -z)
+done
+
+# Sort backups (oldest first)
+IFS=$'\n' backups=($(printf "%s\n" "${backups[@]}" | sort))
 
 # Delete oldest backups if exceeding MAX_BACKUPS
 if [ "${#backups[@]}" -gt "$MAX_BACKUPS" ]; then
