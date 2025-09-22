@@ -120,7 +120,8 @@ alias diff='colordiff'
 ##################
 # Custom Aliases #
 ##################
-alias bashrc="code ~/.bashrc" #Fix
+alias .bashrc="code ~/.bashrc"
+alias bashrc='code $(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")bashrc'
 # Git Aliases and Functions
 gcm() {
     # Get current branch
