@@ -56,7 +56,7 @@ On first run, the script will prompt for:
 * **Source directory**: Directory to back up
 * **Backup destination**: Directory where backups will be stored
 
-This configuration is saved in `sync_config.sh` in the same directory as the script:
+This configuration is saved in `config.sh` in the same directory as the script:
 
 ```bash
 SYNC_SRC="/path/to/source"

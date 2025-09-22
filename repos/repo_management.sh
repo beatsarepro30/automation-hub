@@ -1,71 +1,106 @@
 #!/bin/bash
+set -euo pipefail
 
-# Base directory where all repos will be nested
-PARENT_DIR="$HOME/tmp"
+# ----------------------------
+# CONFIG FILE SETUP
+# ----------------------------
+CONFIG_FILE="$(dirname "$0")/config.sh"
 
-# Config file listing repos to keep
-CONFIG_FILE="$HOME/repos_config.yml"
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "Configuration file not found. Let's set it up."
 
-# Ensure the config file exists
-touch "$CONFIG_FILE"
+    read -rp "Enter parent directory where repos will be nested: " PARENT_DIR
+    while [ -z "$PARENT_DIR" ]; do
+        echo "Parent directory is required."
+        read -rp "Enter parent directory where repos will be nested: " PARENT_DIR
+    done
 
-echo "Reading config from $CONFIG_FILE..."
-echo "Parent directory: $PARENT_DIR"
+    cat > "$CONFIG_FILE" <<EOF
+PARENT_DIR="$PARENT_DIR"
+EOF
 
-# Expand ~ for safety
-expand_path() {
-    eval echo "$1"
+    echo "Configuration saved to $CONFIG_FILE"
+fi
+
+# Load config
+source "$CONFIG_FILE"
+
+# --- Expand ~ in PARENT_DIR ---
+PARENT_DIR=$(eval echo "$PARENT_DIR")
+
+# --- Utility function to print paths with ~ ---
+print_path() {
+    local path="$1"
+    if [[ "$path" == "$HOME"* ]]; then
+        echo "~${path#$HOME}"
+    else
+        echo "$path"
+    fi
 }
 
-# Read active repos (ignore commented and blank lines)
-mapfile -t ACTIVE_PATHS < <(grep -vE '^\s*#' "$CONFIG_FILE" | awk 'NF {print $1}')
+echo "Using parent directory: $(print_path "$PARENT_DIR")"
 
-# Read commented out repos (lines starting with # and not blank)
-mapfile -t COMMENTED_PATHS < <(grep -E '^\s*#' "$CONFIG_FILE" | awk 'NF {print $2}')
+# --- Ensure the repo config file exists ---
+REPOS_FILE="$PARENT_DIR/repos.yml"
+mkdir -p "$PARENT_DIR"
+[ -f "$REPOS_FILE" ] || touch "$REPOS_FILE"
 
-echo "Active repo paths: ${ACTIVE_PATHS[*]}"
-echo "Commented out repo paths: ${COMMENTED_PATHS[*]}"
+# --- Read active and commented repos safely ---
+ACTIVE_PATHS=()
+COMMENTED_PATHS=()
+while IFS= read -r line || [ -n "$line" ]; do
+    [[ -z "$line" || "$line" =~ ^[[:space:]]*$ ]] && continue
+    if [[ "$line" =~ ^# ]]; then
+        COMMENTED_PATHS+=("$(echo "$line" | awk '{print $2}')")
+    else
+        ACTIVE_PATHS+=("$(echo "$line" | awk '{print $1}')")
+    fi
+done < "$REPOS_FILE"
 
-# Recursively find git repos under PARENT_DIR
-while IFS= read -r repo_dir; do
-    # Compute path relative to PARENT_DIR
+# Print paths using ~
+echo -n "Active repo paths: "
+for p in "${ACTIVE_PATHS[@]}"; do
+    echo -n "$(print_path "$PARENT_DIR/$p") "
+done
+echo
+
+echo -n "Commented out repo paths: "
+for p in "${COMMENTED_PATHS[@]}"; do
+    [[ -n "$p" ]] && echo -n "$(print_path "$PARENT_DIR/$p") "
+done
+echo
+
+# --- Recursively find git repos under PARENT_DIR ---
+find "$PARENT_DIR" -type d -name ".git" -prune -exec dirname {} \; | while IFS= read -r repo_dir; do
     relative_path=${repo_dir#"$PARENT_DIR/"}
 
-    # If repo is not in config (active or commented), add it
+    # Add new repos to repos.yml if not listed
     if [[ ! " ${ACTIVE_PATHS[*]} ${COMMENTED_PATHS[*]} " =~ " $relative_path " ]]; then
         remote_url=$(git -C "$repo_dir" config --get remote.origin.url 2>/dev/null)
         if [ -n "$remote_url" ]; then
-            echo "Adding new repo to config: $relative_path $remote_url"
-            echo "$relative_path $remote_url" >> "$CONFIG_FILE"
+            echo "Adding new repo to config: $(print_path "$repo_dir") $remote_url"
+            echo "$relative_path $remote_url" >> "$REPOS_FILE"
         else
-            echo "Warning: repo $relative_path has no remote URL, skipping addition to config"
+            echo "Warning: repo $(print_path "$repo_dir") has no remote URL, skipping addition to config"
         fi
     fi
 
-    # If repo is commented out, delete it
+    # Delete commented out repos
     if [[ " ${COMMENTED_PATHS[*]} " =~ " $relative_path " ]]; then
-        echo "Deleting commented out repo: $relative_path"
+        echo "Deleting commented out repo: $(print_path "$repo_dir")"
         rm -rf "$repo_dir"
     fi
-done < <(
-    # Find all directories containing .git recursively
-    find "$PARENT_DIR" -type d -name ".git" -prune -exec dirname {} \;
-)
+done
 
-# Clone or update active repos only
-while IFS= read -r line; do
-    # Skip empty or whitespace-only lines silently
+# --- Clone or update active repos only ---
+while IFS= read -r line || [ -n "$line" ]; do
     [[ -z "$line" || "$line" =~ ^[[:space:]]*$ ]] && continue
-
-    # Skip commented lines
     [[ "$line" =~ ^# ]] && continue
 
     relative_path=$(echo "$line" | awk '{print $1}')
     remote_url=$(echo "$line" | awk '{print $2}')
-
     full_path="$PARENT_DIR/$relative_path"
 
-    # Skip lines that don't have both fields
     if [[ -z "$relative_path" || -z "$remote_url" ]]; then
         echo "Warning: malformed line in config: '$line' (skipping)"
         continue
@@ -74,10 +109,14 @@ while IFS= read -r line; do
     if [ -d "$full_path/.git" ]; then
         continue  # Repo exists, skip
     else
-        echo "Cloning missing active repo: $relative_path from $remote_url"
+        echo "Cloning missing active repo: $(print_path "$full_path") from $remote_url"
         mkdir -p "$(dirname "$full_path")"
         git clone "$remote_url" "$full_path"
     fi
-done < "$CONFIG_FILE"
+done < "$REPOS_FILE"
+
+# --- Remove any empty directories that do NOT contain .git ---
+echo "Removing empty directories (excluding git repos) under $(print_path "$PARENT_DIR")..."
+find "$PARENT_DIR" -type d -empty ! -path "*/.git*" -print -delete
 
 echo "Cleanup complete!"

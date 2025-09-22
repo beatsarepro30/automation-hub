@@ -6,6 +6,8 @@ This Bash script automates the management of Git repositories in a specified par
 * **Clone missing active repositories** from a configuration file.
 * **Delete commented-out repositories**.
 * **Automatically add newly detected repositories** to the configuration file.
+* **Remove empty directories** that are no longer in use (excluding directories containing `.git`).
+* **Print paths using `~` for \$HOME** in all messages for cleaner output.
 
 ---
 
@@ -15,9 +17,10 @@ This Bash script automates the management of Git repositories in a specified par
 2. [Setup](#setup)
 3. [Configuration File](#configuration-file)
 4. [Usage](#usage)
-5. [Examples](#examples)
-6. [Behavior](#behavior)
-7. [Notes](#notes)
+5. [Behavior](#behavior)
+6. [Cron Scheduling](#cron-scheduling)
+7. [Examples](#examples)
+8. [Notes](#notes)
 
 ---
 
@@ -44,13 +47,13 @@ chmod +x manage_repos.sh
 PARENT_DIR="$HOME/repos"
 ```
 
-or edit the variable in the script.
+or let the script prompt you to create a configuration file the first time it runs.
 
 ---
 
 ## Configuration File
 
-The configuration file is a plain text file, e.g., `repos_config.yml`, that defines repositories to manage.
+The configuration file is a plain text file (`repos.yml`) that defines repositories to manage.
 
 ### Format
 
@@ -76,6 +79,8 @@ tools/team2/repoB       https://github.com/myuser/repoB.git
 # Empty lines are allowed
 ```
 
+---
+
 ## Usage
 
 Run the script manually from the terminal:
@@ -84,7 +89,9 @@ Run the script manually from the terminal:
 ./manage_repos.sh
 ```
 
-### Behavior
+---
+
+## Behavior
 
 1. **Cloning Active Repos:**
 
@@ -98,9 +105,17 @@ Run the script manually from the terminal:
 
    * Any repository discovered in `$PARENT_DIR` but not present in the config file is automatically added to the config file.
 
+4. **Cleaning Up Empty Directories:**
+
+   * Any empty directories under `$PARENT_DIR` that do **not contain a `.git` folder** are removed. Nested empty directories are handled recursively.
+
+5. **Path Display:**
+
+   * All paths in messages are printed using `~` for `$HOME` to improve readability.
+
 ---
 
-### Recommendation: Running via Cron
+## Cron Scheduling
 
 You can schedule the script to run automatically at regular intervals using `cron`. For example, to run the script **every day at 2:00 AM**:
 
@@ -118,9 +133,11 @@ crontab -e
 
 * `0 2 * * *` → runs at 2:00 AM every day
 * `>> /home/username/manage_repos.log 2>&1` → appends output and errors to a log file
-* Make sure to replace `/home/username/path/to/manage_repos.sh` with the actual path to your script.
+* Replace `/home/username/path/to/manage_repos.sh` with the actual path to your script.
 
 3. Save and exit the editor. Cron will automatically run the script according to the schedule.
+
+---
 
 ## Examples
 
@@ -141,12 +158,14 @@ projects/team1/repoA
 projects/team2/repoB
 ```
 
+Empty directories that are no longer needed are removed automatically.
+
 ---
 
 ## Notes
 
 * The script safely ignores **empty lines** or lines with only whitespace.
 * Malformed lines in the config (missing relative path or remote URL) generate a warning.
-* Supports `~` expansion in paths if used in configuration or `PARENT_DIR`.
-* Designed for recursive nested repositories and can handle deep folder structures.
-
+* Supports `~` expansion in paths for `$HOME`.
+* Designed for **recursive nested repositories** and can handle deep folder structures.
+* Only empty directories **without `.git`** are deleted, preventing accidental removal of repositories.

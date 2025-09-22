@@ -26,7 +26,7 @@ trap 'rm -f "$LOCKFILE"' EXIT
 # ----------------------------
 # CONFIG FILE SETUP
 # ----------------------------
-CONFIG_FILE="$(dirname "$0")/sync_config.sh"
+CONFIG_FILE="$(dirname "$0")/config.sh"
 
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "Configuration file not found. Let's set it up."
