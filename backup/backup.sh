@@ -2,6 +2,17 @@
 set -euo pipefail
 
 # ----------------------------
+# HELPER: Resolve paths (handles ~ and relative paths)
+# ----------------------------
+resolve_path() {
+    local path="$1"
+    if [[ "$path" == ~* ]]; then
+        path="${path/#\~/$HOME}"
+    fi
+    echo "$(realpath -m "$path")"
+}
+
+# ----------------------------
 # LOCKFILE (prevent overlapping runs)
 # ----------------------------
 LOCKFILE="/tmp/sync.lock"
@@ -32,8 +43,8 @@ if [ ! -f "$CONFIG_FILE" ]; then
         read -rp "Enter backup destination: " DEST_INPUT
     done
 
-    SRC_INPUT="$(realpath "$SRC_INPUT")"
-    DEST_INPUT="$(realpath "$DEST_INPUT")"
+    SRC_INPUT="$(resolve_path "$SRC_INPUT")"
+    DEST_INPUT="$(resolve_path "$DEST_INPUT")"
 
     cat > "$CONFIG_FILE" <<EOF
 SYNC_SRC="$SRC_INPUT"
@@ -45,8 +56,19 @@ fi
 
 # Load config
 source "$CONFIG_FILE"
-SRC="$(realpath "$SYNC_SRC")"
-DEST="$(realpath "$SYNC_DEST")"
+
+# ----------------------------
+# OPTIONAL: Command-line overrides
+# ----------------------------
+if [ $# -ge 1 ]; then
+    SYNC_SRC="$(resolve_path "$1")"
+fi
+if [ $# -ge 2 ]; then
+    SYNC_DEST="$(resolve_path "$2")"
+fi
+
+SRC="$(resolve_path "$SYNC_SRC")"
+DEST="$(resolve_path "$SYNC_DEST")"
 
 # ----------------------------
 # BACKUP SETUP
@@ -80,8 +102,8 @@ fi
 # LOGGING WITH SIZE MANAGEMENT
 # ----------------------------
 LOGFILE="$DEST/sync.log"
-MAX_LOG_SIZE=$((5 * 1024 * 1024))        # 5 MB max size
-TARGET_LOG_SIZE=$((MAX_LOG_SIZE / 2))    # Shrink to 50% of max size
+MAX_LOG_SIZE=$((5 * 1024 * 1024))
+TARGET_LOG_SIZE=$((MAX_LOG_SIZE / 2))
 
 if [ -f "$LOGFILE" ]; then
     LOGSIZE=$(stat -c%s "$LOGFILE")
@@ -91,7 +113,6 @@ if [ -f "$LOGFILE" ]; then
     fi
 fi
 
-# Redirect stdout/stderr to log
 exec >> "$LOGFILE" 2>&1
 
 echo
@@ -102,7 +123,7 @@ echo "Backup: $NEW_BACKUP"
 echo "================================================================="
 
 # ----------------------------
-# SYNC PHASE (recursive, git-aware, preserves symlinks/permissions)
+# SYNC PHASE
 # ----------------------------
 echo
 echo "--- SYNC PHASE ---"
@@ -111,7 +132,6 @@ sync_dir() {
     local src_dir="$1"
     local dest_dir="$2"
 
-    # Skip git repos
     if [ -d "$src_dir/.git" ]; then
         echo "  Skipping git repo: ${src_dir#$SRC/}"
         return
@@ -136,7 +156,7 @@ sync_dir() {
 sync_dir "$SRC" "$NEW_BACKUP"
 
 # ----------------------------
-# CLEANUP PHASE (recursive, git-aware, remove empty directories)
+# CLEANUP PHASE
 # ----------------------------
 echo
 echo "--- CLEANUP PHASE (removing stale files & empty dirs) ---"
@@ -164,7 +184,6 @@ cleanup_dir() {
         fi
     done
 
-    # Remove the directory itself if it is now empty
     if [ -d "$backup_dir" ] && [ -z "$(ls -A "$backup_dir")" ]; then
         rel_dir="${backup_dir#$NEW_BACKUP/}"
         echo "  Removing empty directory: $rel_dir"
