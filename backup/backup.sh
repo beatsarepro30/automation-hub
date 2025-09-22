@@ -123,7 +123,7 @@ echo "Backup: $NEW_BACKUP"
 echo "================================================================="
 
 # ----------------------------
-# SYNC PHASE
+# SYNC PHASE (incremental, git-aware, preserves symlinks)
 # ----------------------------
 echo
 echo "--- SYNC PHASE ---"
@@ -132,6 +132,7 @@ sync_dir() {
     local src_dir="$1"
     local dest_dir="$2"
 
+    # Skip git repos
     if [ -d "$src_dir/.git" ]; then
         echo "  Skipping git repo: ${src_dir#$SRC/}"
         return
@@ -142,13 +143,27 @@ sync_dir() {
     for entry in "$src_dir"/*; do
         [ -e "$entry" ] || continue
         local rel_path="${entry#$SRC/}"
+        local dest_entry="$dest_dir/$(basename "$entry")"
 
         if [ -d "$entry" ]; then
-            sync_dir "$entry" "$dest_dir/$(basename "$entry")"
+            sync_dir "$entry" "$dest_entry"
         elif [ -f "$entry" ] || [ -L "$entry" ]; then
-            echo "  Copying file: $rel_path"
-            mkdir -p "$(dirname "$dest_dir/$(basename "$entry")")"
-            cp -a "$entry" "$dest_dir/$(basename "$entry")"
+            copy_file=false
+            if [ ! -e "$dest_entry" ]; then
+                copy_file=true
+            elif [ "$entry" -nt "$dest_entry" ]; then
+                copy_file=true
+            elif [ "$(stat -c%s "$entry")" -ne "$(stat -c%s "$dest_entry")" ]; then
+                copy_file=true
+            fi
+
+            if [ "$copy_file" = true ]; then
+                echo "  Copying updated file: $rel_path"
+                mkdir -p "$(dirname "$dest_entry")"
+                cp -a "$entry" "$dest_entry"
+            else
+                echo "  Skipping unchanged file: $rel_path"
+            fi
         fi
     done
 }
@@ -156,7 +171,7 @@ sync_dir() {
 sync_dir "$SRC" "$NEW_BACKUP"
 
 # ----------------------------
-# CLEANUP PHASE
+# CLEANUP PHASE (git-aware, remove stale & empty dirs)
 # ----------------------------
 echo
 echo "--- CLEANUP PHASE (removing stale files & empty dirs) ---"
@@ -184,6 +199,7 @@ cleanup_dir() {
         fi
     done
 
+    # Remove directory if empty
     if [ -d "$backup_dir" ] && [ -z "$(ls -A "$backup_dir")" ]; then
         rel_dir="${backup_dir#$NEW_BACKUP/}"
         echo "  Removing empty directory: $rel_dir"
