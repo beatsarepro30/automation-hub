@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -euo pipefail
 
 # === Config ===
@@ -27,8 +28,46 @@ detect_os_arch() {
 }
 
 read -r OS ARCH <<< "$(detect_os_arch)"
-
 mkdir -p "$INSTALL_DIR"
+
+# === Prompt for GITHUB_TOKEN if needed ===
+if [[ -z "${GITHUB_TOKEN:-}" ]]; then
+    echo "To avoid GitHub API rate limits, you can set a Personal Access Token (PAT)."
+    echo "Create one at https://github.com/settings/tokens (no scopes needed for public repos)."
+    echo "Then run: export GITHUB_TOKEN='your_token_here'"
+fi
+
+# === GitHub API helper with optional token fallback ===
+github_api_curl() {
+    local url="$1"
+    local tmp
+    tmp=$(mktemp)
+    
+    # First try without token
+    if curl -fsSL -o "$tmp" "$url"; then
+        cat "$tmp"
+        rm -f "$tmp"
+        return 0
+    fi
+
+    # If rate limited, try with token
+    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+        echo "Rate limit hit. Retrying with GITHUB_TOKEN..."
+        if curl -fsSL -H "Authorization: token $GITHUB_TOKEN" -o "$tmp" "$url"; then
+            cat "$tmp"
+            rm -f "$tmp"
+            return 0
+        else
+            echo "GitHub API request failed even with token." >&2
+            rm -f "$tmp"
+            return 1
+        fi
+    fi
+
+    echo "GitHub API request failed. Consider setting GITHUB_TOKEN environment variable." >&2
+    rm -f "$tmp"
+    return 1
+}
 
 # === Function to fetch latest release asset URL from GitHub ===
 get_latest_url() {
@@ -37,7 +76,7 @@ get_latest_url() {
     local api_url="https://api.github.com/repos/$repo/releases/latest"
 
     local url
-    url=$(curl -fsSL "$api_url" \
+    url=$(github_api_curl "$api_url" \
           | grep -Po '"browser_download_url": "\K[^"]+' \
           | grep -i "$pattern" \
           | head -n1)
@@ -66,7 +105,6 @@ install_command_if_missing() {
     fi
 
     echo "Downloading $url..."
-    
     tmp_dir=$(mktemp -d)
     trap '[[ -n "$tmp_dir" ]] && rm -rf "$tmp_dir"' EXIT
 
@@ -77,7 +115,6 @@ install_command_if_missing() {
     if [[ "$download_path" == *.zip ]]; then
         echo "Extracting $download_path..."
         unzip -q "$download_path" -d "$tmp_dir"
-
         exe_file=$(find "$tmp_dir" -type f \( -name "*.exe" -o -name "$cmd_name" \) | head -n1)
         if [[ -z "$exe_file" ]]; then
             echo "No executable found in $download_path" >&2
@@ -97,7 +134,6 @@ install_command_if_missing() {
 
     echo "$cmd_name installed to $INSTALL_DIR/$cmd_name"
 }
-
 
 # === Install tools ===
 install_command_if_missing "jq" "$JQ_REPO"

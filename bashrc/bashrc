@@ -219,6 +219,8 @@ alias tfp="terraform plan"
 alias tfip="tfi && tfp"
 # Windows aliases
 alias ex="explorer.exe"
+# Utils
+alias clear_tokens='unset GITHUB_TOKEN'
 
 #####################
 # Custom PS1 Prompt #
