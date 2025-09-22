@@ -113,8 +113,30 @@ echo "================================================================="
 echo
 echo "--- SYNC PHASE ---"
 
-find "$SRC" -mindepth 1 \( -name ".git" -prune -o -print0 \) |
+# Function to decide if a directory contains a .git folder
+should_skip_git() {
+    local dir="$1"
+    [ -d "$dir/.git" ]
+}
+
+export -f should_skip_git
+
+# Use find to traverse directories, pruning any that contain .git
+find "$SRC" -mindepth 1 -print0 |
 while IFS= read -r -d '' path; do
+    # Skip this path if it or any of its parent directories is a git repo
+    # Check relative path parts from the source root
+    skip=false
+    current="$path"
+    while [ "$current" != "$SRC" ]; do
+        if [ -d "$current/.git" ]; then
+            skip=true
+            break
+        fi
+        current=$(dirname "$current")
+    done
+    $skip && continue
+
     rel_path="${path#$SRC/}"
 
     if [ -f "$path" ]; then
