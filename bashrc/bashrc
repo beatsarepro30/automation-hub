@@ -16,6 +16,23 @@ export PATH="$PATH:$HOME/.local/bin"
 shopt -s checkwinsize # auto-update terminal size
 shopt -s extglob      # enable extended glob patterns
 
+# Overwrite default builtin commands
+cd() {
+    if [ $# -eq 0 ]; then
+        # No arguments: go to home like normal
+        builtin cd ~
+    elif [ -d "$1" ]; then
+        # If it's a directory, cd as usual
+        builtin cd "$1"
+    elif [ -f "$1" ]; then
+        # If it's a file, cd into its directory
+        builtin cd "$(dirname "$1")"
+    else
+        echo "cd: No such file or directory: $1"
+        return 1
+    fi
+}
+
 # Generic Aliases
 # https://vikaskyadav.github.io/awesome-bash-alias/
 # Clear
