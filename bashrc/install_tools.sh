@@ -5,6 +5,7 @@ set -euo pipefail
 INSTALL_DIR="$HOME/.local/bin"   # Directory to install executables
 FZF_REPO="junegunn/fzf"
 JQ_REPO="jqlang/jq"
+TERRAFORM_REPO="hashicorp/terraform"
 
 # === Detect OS and Arch ===
 detect_os_arch() {
@@ -84,11 +85,36 @@ get_latest_url() {
     echo "$url"
 }
 
+# === Function to fetch latest stable Terraform URL ===
+get_latest_terraform_url() {
+    # Optional version pattern (default: all versions)
+    local pattern="${1:-*}"
+
+    # Get all available versions, filter by stable and pattern
+    local versions
+    versions=$(curl -s https://releases.hashicorp.com/terraform/ \
+        | grep -Po 'terraform/\K[0-9]+\.[0-9]+\.[0-9]+' \
+        | grep -E "^${pattern//\*/.*}$" \
+        | sort -Vr)
+
+    # Iterate from latest to oldest, return first version that exists for OS/ARCH
+    local version url
+    for version in $versions; do
+        url="https://releases.hashicorp.com/terraform/${version}/terraform_${version}_${OS}_${ARCH}.zip"
+        if curl --head --silent --fail "$url" >/dev/null; then
+            echo "$url"
+            return 0
+        fi
+    done
+
+    echo "Failed to detect latest stable Terraform version matching pattern '${pattern}' for ${OS}_${ARCH}" >&2
+    return 1
+}
+
 # === Generic installer function ===
 install_command_if_missing() {
     local cmd_name="$1"
     local repo="$2"
-    local pattern="${3:-${OS}-${ARCH}}"
 
     if command -v "$cmd_name" &>/dev/null; then
         echo "$cmd_name is already installed"
@@ -97,7 +123,14 @@ install_command_if_missing() {
 
     echo "$cmd_name not found. Downloading latest release..."
     local url
-    url=$(get_latest_url "$repo" "$pattern")
+
+    if [[ "$cmd_name" == "terraform" ]]; then
+        local pattern="${3:-*}"
+        url=$(get_latest_terraform_url "$pattern")
+    else
+        local pattern="${3:-${OS}-${ARCH}}"
+        url=$(get_latest_url "$repo" "$pattern")
+    fi
 
     if [[ -z "$url" ]]; then
         echo "Could not find a release for $cmd_name ($OS-$ARCH)" >&2
@@ -130,8 +163,7 @@ install_command_if_missing() {
         tar -xf "$download_path" -C "$tmp_dir"
         exe_file=$(find "$tmp_dir" -type f -name "$cmd_name" | head -n1)
     else
-        # For direct executables or unknown formats
-        exe_file="$download_path"
+        exe_file="$download_path" # direct binary
     fi
 
     if [[ -z "$exe_file" ]]; then
@@ -153,6 +185,7 @@ install_command_if_missing() {
 # === Install tools ===
 install_command_if_missing "jq" "$JQ_REPO"
 install_command_if_missing "fzf" "$FZF_REPO" "fzf-.*-${OS}_${ARCH}"
+install_command_if_missing "terraform" "$TERRAFORM_REPO" # "1.9.*"
 
 echo "Installation complete. You may need to restart your shell or run 'source ~/.bashrc' to update PATH."
 
