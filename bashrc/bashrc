@@ -241,7 +241,10 @@ alias tfi="terraform init --backend-config=backend.hcl"
 alias tfp="terraform plan"
 alias tfip="tfi && tfp"
 # Windows aliases
-alias ex="explorer.exe"
+ex() {
+    local path="${1:-.}"
+    explorer.exe "$path"
+}
 # Utils
 alias clear_tokens='unset GITHUB_TOKEN'
 extract() {
