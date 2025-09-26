@@ -26,10 +26,11 @@ echo "Detected platform: $PLATFORM" | tee -a "$LOG_FILE"
 # -------------------------
 if [[ "$PLATFORM" == "unix" ]]; then
     if [ -f "$CRON_FILE" ]; then
-        crontab -l > "$SCRIPT_DIR/current_cron" 2>/dev/null || true
-        cat "$CRON_FILE" >> "$SCRIPT_DIR/current_cron"
-        crontab "$SCRIPT_DIR/current_cron"
-        echo "Unix cron jobs installed" | tee -a "$LOG_FILE"
+        crontab "$CRON_FILE"
+        echo "Unix cron jobs overwritten with $CRON_FILE" | tee -a "$LOG_FILE"
+    else
+        echo "Cron file not found: $CRON_FILE" | tee -a "$LOG_FILE"
+        exit 1
     fi
 fi
 
