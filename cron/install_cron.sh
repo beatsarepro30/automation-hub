@@ -2,7 +2,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CRON_FILE="$SCRIPT_DIR/my_cron_jobs"
-LOG_FILE="$SCRIPT_DIR/install_cron.log"
+LOG_FILE="$SCRIPT_DIR/my_cron_jobs.log"
 
 echo "==== $(date) ====" >> "$LOG_FILE"
 
