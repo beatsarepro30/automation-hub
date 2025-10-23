@@ -106,14 +106,14 @@ else
 fi
 
 # Standard 8-color ANSI codes
-RED="\033[0;31m"
-GREEN="\033[0;32m"
-YELLOW="\033[0;33m"
-BLUE="\033[0;34m"
-MAGENTA="\033[0;35m"
-CYAN="\033[0;36m"
-WHITE="\033[0;37m"
-RESET="\033[0m"
+RED='\[\033[0;31m\]'
+GREEN='\[\033[0;32m\]'
+YELLOW='\[\033[0;33m\]'
+BLUE='\[\033[0;34m\]'
+MAGENTA='\[\033[0;35m\]'
+CYAN='\[\033[0;36m\]'
+WHITE='\[\033[0;37m\]'
+RESET='\[\033[0m\]'
 
 # Print a colorized diff
 colordiff() {
@@ -167,7 +167,7 @@ git_branch() {
     local branch
     branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
     if [ -n "$branch" ]; then
-        echo " ${GREEN}($branch)${RESET}"  # cyan branch
+        echo " 🌿${GREEN}(${branch})${RESET}"
     fi
 }
 # Open current git repo (or specific file) in GitHub in default browser
@@ -271,10 +271,10 @@ set_prompt() {
     local ret=$?
     local exit_str=""
     if (( ret != 0 )); then
-        exit_str="${RED}($ret)${RESET}"  # red exit code
+        exit_str="${RED}(${ret})${RESET}"
     fi
 
-    PS1="${CYAN}\w${RESET}$(git_branch) ${exit_str}${MAGENTA}\$ ${RESET}"
+    PS1="${CYAN}\w${RESET}$(git_branch) ${exit_str}${MAGENTA}\\$ ${RESET}"
 }
 
 PROMPT_COMMAND=set_prompt
