@@ -240,6 +240,8 @@ alias tf="terraform"
 alias tfi="terraform init --backend-config=backend.hcl"
 alias tfp="terraform plan"
 alias tfip="tfi && tfp"
+alias tfa="terraform apply"
+alias tfa="terraform apply --auto-approve"
 # Windows aliases
 ex() {
     local path="${1:-.}"
