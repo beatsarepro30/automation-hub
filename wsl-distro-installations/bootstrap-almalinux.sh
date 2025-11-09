@@ -15,6 +15,9 @@ dnf install -y \
   git wget unzip tar nano vim tree jq htop fzf less which findutils rsync \
   net-tools iproute bind-utils socat nmap-ncat
 
+echo "=== Setting Git credential helper ==="
+git config --global credential.helper store
+
 echo "=== Installing development tools and Python ==="
 dnf groupinstall -y "Development Tools"
 dnf install -y \
