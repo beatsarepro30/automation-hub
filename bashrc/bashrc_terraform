@@ -127,7 +127,7 @@ tf_validate() {
 }
 
 tf_plan() {
-  _run_terraform "plan" terraform plan -out=".tfplan"
+  _run_terraform "plan" terraform plan
 }
 
 tf_apply() {
