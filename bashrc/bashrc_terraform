@@ -158,6 +158,7 @@ tf_fmt() {
   _run_terraform "fmt" terraform fmt -recursive
 }
 
+alias tf="terraform"
 alias tfi='tf_init'
 alias tfv='tf_validate'
 alias tfp='tf_plan'
