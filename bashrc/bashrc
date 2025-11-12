@@ -4,11 +4,6 @@
 # If not running interactively, don't do anything
 [[ -n $PS1 ]] || return
 
-# --- Basic bash safety ---
-set -o errexit
-set -o pipefail
-set -o nounset
-
 # Set environment
 export HISTCONTROL='ignoredups'
 export HISTSIZE=5000
