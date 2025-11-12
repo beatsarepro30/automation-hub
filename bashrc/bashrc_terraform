@@ -1,0 +1,186 @@
+set -o errexit
+set -o pipefail
+set -o nounset
+
+RED="\033[0;31m"
+GREEN="\033[0;32m"
+YELLOW="\033[1;33m"
+BLUE="\033[0;34m"
+NC="\033[0m"
+
+ROCKET="🚀"
+CHECKMARK="✅"
+CROSSMARK="❌"
+CANCEL="⚠️"
+
+TF_LOG_ROOT="$HOME/.terraform_logs"
+mkdir -p "$TF_LOG_ROOT"
+
+_get_workspace_name() {
+  local ws
+  ws=$(terraform workspace show 2>/dev/null || true)
+  if [[ -z "$ws" || "$ws" == "default" ]]; then
+    ws=$(pwd | sed 's|/|_|g' | sed 's|^_||')
+  fi
+  echo "$ws"
+}
+
+_get_master_log() {
+  local ws=$(_get_workspace_name)
+  echo "$TF_LOG_ROOT/${ws}.logs"
+}
+
+_make_run_log_path() {
+  local type=$1
+  local ws=$(_get_workspace_name)
+  local timestamp
+  timestamp=$(date +"%Y-%m-%d_%H%M%S")
+  local dir="$TF_LOG_ROOT/$ws"
+  mkdir -p "$dir"
+  echo "${dir}/${type}-${timestamp}.log"
+}
+
+_strip_ansi() {
+  sed -r "s/\x1B\[[0-9;]*[mK]//g"
+}
+
+_strip_ansi_str() {
+  echo -e "$1" | _strip_ansi
+}
+
+_append_master_log() {
+  local type=$1
+  local status=$2
+  local log_file=$3
+  local master_log=$(_get_master_log)
+
+  [[ "$type" != "plan" && "$type" != "apply" && "$type" != "destroy" ]] && return
+
+  local timestamp
+  timestamp=$(date +"%Y-%m-%d %H:%M:%S")
+
+  local urls
+  urls=$(grep -Eo 'https?://[^ ]+' "$log_file" | sed -r "s/\x1B\[[0-9;]*[mK]//g" || true)
+  urls=$(_strip_ansi_str "$urls")
+  local target="${urls:-local}"
+
+  local emoji
+  case "$status" in
+    SUCCESS) emoji="$CHECKMARK" ;;
+    FAILED)  emoji="$CROSSMARK" ;;
+    CANCELLED) emoji="$CANCEL" ;;
+  esac
+
+  local padded_type
+  printf -v padded_type "%-7s" "$type"
+
+  local entry="${emoji} ${padded_type} (${timestamp}) ${target} | ${log_file}"
+
+  { echo -e "$entry"; cat "$master_log" 2>/dev/null || true; } > "${master_log}.tmp" && mv -f "${master_log}.tmp" "$master_log"
+
+  echo -e "\n${GREEN}${CHECKMARK} 🎉 Terraform execution finished! Logs are ready and looking great! 🎉"
+  echo -e "Master log: ${master_log}\nDetailed log: ${log_file}${NC}"
+}
+
+_run_terraform() {
+  local type="$1"
+  shift
+  local cmd=("$@")
+
+  local use_log=false
+  if [[ "$type" == "plan" || "$type" == "apply" || "$type" == "destroy" ]]; then
+    use_log=true
+    local log_file=$(_make_run_log_path "$type")
+  fi
+
+  echo -e "${BLUE}${ROCKET} Running terraform ${type}...${NC}"
+
+  if $use_log; then
+    if "${cmd[@]}" 2>&1 | tee >( _strip_ansi > "$log_file"); then
+      _append_master_log "$type" "SUCCESS" "$log_file"
+    else
+      local status="FAILED"
+      if [[ "$type" == "apply" ]]; then
+        if grep -q "Apply discarded" "$log_file"; then
+          status="CANCELLED"
+        fi
+      fi
+      _append_master_log "$type" "$status" "$log_file"
+
+      local emoji_msg="$CROSSMARK"
+      [[ "$status" == "CANCELLED" ]] && emoji_msg="$CANCEL"
+      echo -e "${RED}${emoji_msg} ${type} ${status,,}! See log above.${NC}"
+    fi
+  else
+    if "${cmd[@]}"; then
+      echo -e "${GREEN}${CHECKMARK} Terraform ${type} finished successfully!${NC}"
+    else
+      echo -e "${RED}${CROSSMARK} Terraform ${type} failed!${NC}"
+    fi
+  fi
+}
+
+tf_init() {
+  local cmd=("terraform" "init")
+  [[ -f "backend.hcl" ]] && cmd+=("--backend-config=backend.hcl")
+  _run_terraform "init" "${cmd[@]}"
+}
+
+tf_validate() {
+  _run_terraform "validate" terraform validate
+}
+
+tf_plan() {
+  _run_terraform "plan" terraform plan -out=".tfplan"
+}
+
+tf_apply() {
+  _run_terraform "apply" terraform apply
+}
+
+tf_apply_auto() {
+  _run_terraform "apply" terraform apply -auto-approve
+}
+
+tf_destroy() {
+  echo -e "${RED}${CANCEL} WARNING: This will destroy resources!${NC}"
+  read -p "Type 'yes' to continue: " CONFIRM
+  local log_file=$(_make_run_log_path "destroy")
+  if [[ "$CONFIRM" != "yes" ]]; then
+    _append_master_log "destroy" "CANCELLED" "$log_file"
+    echo -e "${YELLOW}Operation cancelled.${NC}"
+    return 0
+  fi
+  _run_terraform "destroy" terraform destroy
+}
+
+tf_destroy_auto() {
+  _run_terraform "destroy" terraform destroy -auto-approve
+}
+
+tf_fmt() {
+  _run_terraform "fmt" terraform fmt -recursive
+}
+
+alias tfi='tf_init'
+alias tfv='tf_validate'
+alias tfp='tf_plan'
+alias tfa='tf_apply'
+alias tfaa='tf_apply_auto'
+alias tfd='tf_destroy'
+alias tfda='tf_destroy_auto'
+alias tfip='tf_init && tf_plan'
+alias tff='tf_fmt'
+
+tf_logs() {
+  local master=$(_get_master_log)
+  echo -e "${BLUE}Master log: $master${NC}"
+  [[ -f "$master" ]] && cat "$master" || echo "No logs yet."
+}
+
+tf_tail() {
+  local ws=$(_get_workspace_name)
+  local latest
+  latest=$(find "$TF_LOG_ROOT/$ws" -type f -name "*.log" | sort | tail -n 1)
+  [[ -n "$latest" ]] && tail -f "$latest" || echo "No detailed logs found."
+}

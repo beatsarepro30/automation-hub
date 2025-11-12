@@ -4,6 +4,11 @@
 # If not running interactively, don't do anything
 [[ -n $PS1 ]] || return
 
+# --- Basic bash safety ---
+set -o errexit
+set -o pipefail
+set -o nounset
+
 # Set environment
 export HISTCONTROL='ignoredups'
 export HISTSIZE=5000
@@ -114,6 +119,14 @@ MAGENTA='\[\033[0;35m\]'
 CYAN='\[\033[0;36m\]'
 WHITE='\[\033[0;37m\]'
 RESET='\[\033[0m\]'
+
+# Set of Emojis
+CHECKMARK="✅"
+CROSSMARK="❌"
+ROCKET="🚀"
+PLAN="🧩"
+APPLY="🛠"
+DESTROY="💣"
 
 # Print a colorized diff
 colordiff() {
@@ -236,13 +249,9 @@ cob() {
     fi
     git checkout -b "$1" && git push -u origin "$1"
 }
-# Terraform Aliases
-alias tf="terraform"
-alias tfi="terraform init --backend-config=backend.hcl"
-alias tfp="terraform plan"
-alias tfip="tfi && tfp"
-alias tfa="terraform apply"
-alias tfa="terraform apply --auto-approve"
+# Terraform Aliases from bashrc_terraform
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bashrc_terraform"
+
 # Windows aliases
 ex() {
     local path="${1:-.}"
