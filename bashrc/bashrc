@@ -249,8 +249,6 @@ cob() {
     fi
     git checkout -b "$1" && git push -u origin "$1"
 }
-# Terraform Aliases from bashrc_terraform
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bashrc_terraform"
 
 # Windows aliases
 ex() {
