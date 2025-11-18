@@ -282,7 +282,7 @@ set_prompt() {
     PS1="${CYAN}\w${RESET}$(git_branch) ${exit_str}${MAGENTA}\\$ ${RESET}"
 }
 
-PROMPT_COMMAND=set_prompt
+set_prompt
 PROMPT_DIRTRIM=6
 
 ####################################
