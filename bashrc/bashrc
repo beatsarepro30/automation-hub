@@ -175,7 +175,7 @@ git_branch() {
     local branch
     branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
     if [ -n "$branch" ]; then
-        echo " 🌿${GREEN}(${branch})${RESET}"
+        echo " 🌿\[\033[0;32m\](${branch})"
     fi
 }
 # Open current git repo (or specific file) in GitHub in default browser
@@ -276,13 +276,12 @@ set_prompt() {
     local ret=$?
     local exit_str=""
     if (( ret != 0 )); then
-        exit_str="${RED}(${ret})${RESET}"
+        exit_str="\[\033[0;31m\](${ret})"
     fi
-
-    PS1="${CYAN}\w${RESET}$(git_branch) ${exit_str}${MAGENTA}\\$ ${RESET}"
+    PS1="\[\033[0;36m\]\w$(git_branch)${exit_str}\[\033[0;35m\]\\$ \[\033[0m\]"
 }
 
-set_prompt
+PROMPT_COMMAND=set_prompt
 PROMPT_DIRTRIM=6
 
 ####################################
