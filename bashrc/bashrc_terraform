@@ -60,11 +60,20 @@ _append_master_log() {
   urls=$(_strip_ansi_str "$urls")
   local target="${urls:-local}"
 
-  local emoji
+  local emoji color
   case "$status" in
-    SUCCESS) emoji="$CHECKMARK" ;;
-    FAILED)  emoji="$CROSSMARK" ;;
-    CANCELLED) emoji="$CANCEL" ;;
+    SUCCESS)
+      emoji="$CHECKMARK"
+      color="$GREEN"
+      ;;
+    FAILED)
+      emoji="$CROSSMARK"
+      color="$RED"
+      ;;
+    CANCELLED)
+      emoji="$CANCEL"
+      color="$YELLOW"
+      ;;
   esac
 
   local padded_type
@@ -72,10 +81,13 @@ _append_master_log() {
 
   local entry="${emoji} ${padded_type} (${timestamp}) ${target} | ${log_file}"
 
-  { echo -e "$entry"; cat "$master_log" 2>/dev/null || true; } > "${master_log}.tmp" && mv -f "${master_log}.tmp" "$master_log"
+  { echo -e "$entry"; cat "$master_log" 2>/dev/null || true; } > "${master_log}.tmp" \
+    && mv -f "${master_log}.tmp" "$master_log"
 
-  echo -e "\n${GREEN}${CHECKMARK} 🎉 Terraform execution finished! Logs are ready and looking great! 🎉"
-  echo -e "Master log: ${master_log}\nDetailed log: ${log_file}${NC}"
+  # 🎉 FIXED — no more forced green checkmark
+  echo -e "\n${color}${emoji} Terraform ${type} ${status,,}!${NC}"
+  echo -e "Master log: ${master_log}"
+  echo -e "Detailed log: ${log_file}${NC}\n"
 }
 
 _run_terraform() {
@@ -92,27 +104,38 @@ _run_terraform() {
   echo -e "${BLUE}${ROCKET} Running terraform ${type}...${NC}"
 
   if $use_log; then
-    if "${cmd[@]}" 2>&1 | tee >( _strip_ansi > "$log_file"); then
-      _append_master_log "$type" "SUCCESS" "$log_file"
-    else
-      local status="FAILED"
-      if [[ "$type" == "apply" ]]; then
-        if grep -q "Apply discarded" "$log_file"; then
-          status="CANCELLED"
-        fi
-      fi
-      _append_master_log "$type" "$status" "$log_file"
+      # Run terraform and capture REAL exit code
+      "${cmd[@]}" 2>&1 | tee >( _strip_ansi > "$log_file")
+      local terraform_rc=${PIPESTATUS[0]}
 
-      local emoji_msg="$CROSSMARK"
-      [[ "$status" == "CANCELLED" ]] && emoji_msg="$CANCEL"
-      echo -e "${RED}${emoji_msg} ${type} ${status,,}! See log above.${NC}"
-    fi
+      if [[ $terraform_rc -eq 0 ]]; then
+          _append_master_log "$type" "SUCCESS" "$log_file"
+      else
+          local status="FAILED"
+
+          # Special apply cancellation detection
+          if [[ "$type" == "apply" ]]; then
+              if grep -q "Apply discarded" "$log_file"; then
+                  status="CANCELLED"
+              fi
+          fi
+
+          _append_master_log "$type" "$status" "$log_file"
+
+          local emoji_msg="$CROSSMARK"
+          [[ "$status" == "CANCELLED" ]] && emoji_msg="$CANCEL"
+          echo -e "${RED}${emoji_msg} ${type} ${status,,}! See log above.${NC}"
+      fi
   else
-    if "${cmd[@]}"; then
-      echo -e "${GREEN}${CHECKMARK} Terraform ${type} finished successfully!${NC}"
-    else
-      echo -e "${RED}${CROSSMARK} Terraform ${type} failed!${NC}"
-    fi
+      # No logging mode (init, validate, fmt)
+      "${cmd[@]}"
+      local terraform_rc=$?
+
+      if [[ $terraform_rc -eq 0 ]]; then
+          echo -e "${GREEN}${CHECKMARK} Terraform ${type} finished successfully!${NC}"
+      else
+          echo -e "${RED}${CROSSMARK} Terraform ${type} failed!${NC}"
+      fi
   fi
 }
 

@@ -213,6 +213,8 @@ gho() {
     # Open in default browser (cross-platform)
     if command -v xdg-open &>/dev/null; then
         xdg-open "$gh_url" &>/dev/null
+    elif command -v powershell.exe &> /dev/null; then
+        powershell.exe start "$gh_url";
     elif command -v open &>/dev/null; then
         open "$gh_url"
     elif command -v start &>/dev/null; then
