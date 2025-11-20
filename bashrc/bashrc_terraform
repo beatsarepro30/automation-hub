@@ -90,6 +90,15 @@ _append_master_log() {
   echo -e "Detailed log: ${log_file}${NC}\n"
 }
 
+_is_cancelled() {
+  local log_file="$1"
+
+  # Detect cancellation messages emitted by Terraform across versions
+  grep -Eq \
+    "Apply cancelled|Apply discarded|Operation cancelled|Cancelled by user|user cancelled|User cancelled|interrupted by user|KeyboardInterrupt|user aborted|Destroy cancelled" \
+    "$log_file"
+}
+
 _run_terraform() {
   local type="$1"
   shift
@@ -111,21 +120,21 @@ _run_terraform() {
       if [[ $terraform_rc -eq 0 ]]; then
           _append_master_log "$type" "SUCCESS" "$log_file"
       else
-          local status="FAILED"
+        local status="FAILED"
+        local color="$RED"
 
-          # Special apply cancellation detection
-          if [[ "$type" == "apply" ]]; then
-              if grep -q "Apply discarded" "$log_file"; then
-                  status="CANCELLED"
-              fi
-          fi
+        # Unified cancellation detection for plan/apply/destroy
+        if _is_cancelled "$log_file"; then
+            status="CANCELLED"
+        fi
 
-          _append_master_log "$type" "$status" "$log_file"
+        _append_master_log "$type" "$status" "$log_file"
 
-          local emoji_msg="$CROSSMARK"
-          [[ "$status" == "CANCELLED" ]] && emoji_msg="$CANCEL"
-          echo -e "${RED}${emoji_msg} ${type} ${status,,}! See log above.${NC}"
-      fi
+        local emoji_msg="$CROSSMARK"
+        [[ "$status" == "CANCELLED" ]] && emoji_msg="$CANCEL" && color="$YELLOW"
+
+        echo -e "${color}${emoji_msg} ${type} ${status,,}! See log above.${NC}"
+    fi
   else
       # No logging mode (init, validate, fmt)
       "${cmd[@]}"
