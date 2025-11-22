@@ -1,0 +1,89 @@
+name: Workflow Testbed
+
+on:
+  workflow_dispatch:
+    inputs:
+      should_fail:
+        description: "Set to true to intentionally fail the workflow"
+        required: true
+        default: "false"
+      message:
+        description: "A message to echo"
+        required: true
+        default: "Hello from GitHub Actions"
+      sleep_seconds:
+        description: "How long (in seconds) the workflow should sleep"
+        required: true
+        default: "2"
+      debug_mode:
+        description: "Enable debug logging"
+        required: false
+        default: "false"
+
+jobs:
+  test-job:
+    runs-on: ubuntu-latest
+
+    outputs:
+      final_status: ${{ steps.set-output.outputs.status }}
+
+    steps:
+      - name: Print start
+        run: echo "🚀 Starting workflow…"
+
+      - name: Echo message
+        run: |
+          echo "📝 Message: ${{ github.event.inputs.message }}"
+
+      - name: Sleep for requested time
+        run: |
+          echo "⏳ Sleeping for ${{ github.event.inputs.sleep_seconds }} seconds..."
+          sleep ${{ github.event.inputs.sleep_seconds }}
+
+      - name: Optional debug info
+        if: ${{ github.event.inputs.debug_mode == 'true' }}
+        run: |
+          echo "🐞 Debug mode enabled!"
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Actor: $GITHUB_ACTOR"
+          echo "Branch: $GITHUB_REF"
+
+      - name: Simulate random flakiness
+        id: random
+        run: |
+          RAND=$(( RANDOM % 2 ))
+          echo "Random value = $RAND"
+          if [ "$RAND" -eq 0 ]; then
+            echo "Flaky step succeeded 🎉"
+          else
+            echo "Flaky step 'failed' (but not actually failing the job) 😅"
+          fi
+
+      - name: Fail if requested
+        run: |
+          if [ "${{ github.event.inputs.should_fail }}" = "true" ]; then
+            echo "❌ Failing because should_fail=true"
+            exit 1
+          else
+            echo "✔ No failure requested, continuing..."
+          fi
+
+      - name: Step that only runs if workflow previously failed
+        if: failure()
+        run: |
+          echo "🔥 This step runs ONLY when a previous step failed."
+
+      - name: Step that always runs
+        if: always()
+        run: |
+          echo "🔁 This step ALWAYS runs — success or failure."
+
+      - name: Set output
+        id: set-output
+        run: |
+          status="success"
+          if [ "${{ github.event.inputs.should_fail }}" = "true" ]; then
+            status="failed"
+          fi
+          echo "status=$status" >> $GITHUB_OUTPUT
+          echo "📤 Output final_status=$status"
