@@ -23,7 +23,8 @@ on:
 jobs:
   test-job:
     runs-on: ubuntu-latest
-
+    environment: test
+    
     outputs:
       final_status: ${{ steps.set-output.outputs.status }}
 
