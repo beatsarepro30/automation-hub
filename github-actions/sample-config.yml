@@ -1,0 +1,27 @@
+repos:
+  default:
+    owner: beatsarepro30
+    repo: automation-hub
+    default_ref: main
+
+# Workflow-scoped token (preferred env: GITHUB_TOKEN). Fallback key: workflow_token or token
+workflow_token: ""
+
+# Repo-scoped token used for approval endpoints (preferred env: GITHUB_REPO_TOKEN). Fallback key: repo_token
+repo_token: ""
+
+workflows:
+  default:
+    name: workflow testbed
+    file: workflow-testbed.yml
+    ref: main
+    inputs:
+      message: Hello from python script
+      should_fail: "false"
+    auto_approve: True
+    auto_approve_env_names:
+      - test
+    # Optional comment to attach to the approval payload
+    auto_approve_comment: "Ship it!"
+
+poll_interval_seconds: 5
