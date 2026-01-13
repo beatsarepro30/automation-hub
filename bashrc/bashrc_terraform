@@ -163,7 +163,7 @@ tf_plan() {
 }
 
 tf_apply() {
-  _run_terraform "apply" terraform apply
+  wsl_alert _run_terraform "apply" terraform apply
 }
 
 tf_apply_auto() {

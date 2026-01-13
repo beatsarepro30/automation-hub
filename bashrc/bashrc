@@ -334,6 +334,32 @@ path_clean() {
     PATH=${newpath%:}
 }
 
+####################
+# Custom Functions #
+####################
+# WSL alert function: play Windows sound after any command
+wsl_alert() {
+    if ! grep -qEi "(Microsoft|WSL)" /proc/version &>/dev/null; then
+        # Not WSL, just run the command without alert
+        "$@"
+        return
+    fi
+
+    if [ "$MUTE" = "true" ]; then
+        "$@"
+        return
+    fi
+
+    local ALERT_SOUND='C:\Windows\Media\Alarm04.wav'
+
+    # Run the command passed as arguments
+    "$@"
+
+    # Play the Windows sound using PowerShell, even if command fails
+    powershell.exe -c "(New-Object Media.SoundPlayer '$ALERT_SOUND').PlaySync()" 
+}
+
+
 #######################
 # Final configuration #
 #######################
