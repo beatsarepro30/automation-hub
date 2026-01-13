@@ -57,8 +57,10 @@ _append_master_log() {
 
   local urls
   urls=$(grep -Eo 'https?://[^ ]+' "$log_file" | sed -r "s/\x1B\[[0-9;]*[mK]//g" || true)
-  urls=$(_strip_ansi_str "$urls")
-  local target="${urls:-local}"
+  local target
+  target=$(echo "$urls" | grep -i '\.com/app' || true)
+  target="${target:-local}"
+  target=$(_strip_ansi_str "$target")
 
   local emoji color
   case "$status" in
@@ -159,7 +161,7 @@ tf_validate() {
 }
 
 tf_plan() {
-  _run_terraform "plan" terraform plan
+  wsl_alert _run_terraform "plan" terraform plan
 }
 
 tf_apply() {
@@ -167,7 +169,7 @@ tf_apply() {
 }
 
 tf_apply_auto() {
-  _run_terraform "apply" terraform apply -auto-approve
+  wsl_alert _run_terraform "apply" terraform apply -auto-approve
 }
 
 tf_destroy() {
@@ -179,11 +181,11 @@ tf_destroy() {
     echo -e "${YELLOW}Operation cancelled.${NC}"
     return 0
   fi
-  _run_terraform "destroy" terraform destroy
+  wsl_alert _run_terraform "destroy" terraform destroy
 }
 
 tf_destroy_auto() {
-  _run_terraform "destroy" terraform destroy -auto-approve
+  wsl_alert _run_terraform "destroy" terraform destroy -auto-approve
 }
 
 tf_fmt() {
@@ -202,9 +204,35 @@ alias tfip='tf_init && tf_plan'
 alias tff='tf_fmt'
 
 tf_logs() {
+  local show_full=false
+
+  # Parse optional flag
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      -f|--full)
+        show_full=true
+        shift
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+
   local master=$(_get_master_log)
   echo -e "${BLUE}Master log: $master${NC}"
-  [[ -f "$master" ]] && cat "$master" || echo "No logs yet."
+
+  if [[ ! -f "$master" ]]; then
+    echo "No logs yet."
+    return
+  fi
+
+  if $show_full; then
+    cat "$master"
+  else
+    head -n 3 "$master"
+    echo -e "\nTo see full logs, run: tf_logs -f"
+  fi
 }
 
 tf_tail() {
