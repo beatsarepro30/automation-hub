@@ -71,7 +71,6 @@ alias gcot="git checkout"
 alias gchekout="git checkout"
 alias gchckout="git checkout"
 alias gckout="git checkout"
-alias go="git push -u origin"
 alias gsh='git stash'
 alias gw='git whatchanged'
 alias gitlg="git log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit"
