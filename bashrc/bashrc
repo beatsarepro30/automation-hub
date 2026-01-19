@@ -18,17 +18,17 @@ shopt -s extglob      # enable extended glob patterns
 
 # Overwrite default builtin commands
 cd() {
-    if [ $# -eq 0 ]; then
+    if (( $# == 0 )); then
         # No arguments: go to home like normal
-        builtin cd ~
-    elif [ -d "$1" ]; then
+        builtin cd ~ || return
+    elif [[ -d $1 ]]; then
         # If it's a directory, cd as usual
-        builtin cd "$1"
-    elif [ -f "$1" ]; then
+        builtin cd "$1" || return
+    elif [[ -f $1 ]]; then
         # If it's a file, cd into its directory
-        builtin cd "$(dirname "$1")"
+        builtin cd "$(dirname "$1")" || return
     else
-        echo "cd: No such file or directory: $1"
+        echo "cd: No such file or directory: $1" >&2
         return 1
     fi
 }
@@ -61,12 +61,8 @@ dock-rm() { sudo docker rm $(docker ps -a -q); }
 alias gs="git status"
 alias gst="git status -sb"
 alias gl="git log"
-alias ga="git add"
 alias gaa="git add -A"
-alias gal="git add ."
-alias gall="git add ."
 alias gca="git commit -a"
-alias gc="git commit -m"
 alias gcot="git checkout"
 alias gchekout="git checkout"
 alias gchckout="git checkout"
@@ -82,11 +78,10 @@ alias h2="history 20"
 alias h3="history 30"
 alias hgrep='history | grep'
 # List commands
-alias l="ls"
 alias l='ls -lAh'
-alias ls="ls -a"
-alias la="ls -a"
-alias ll="ls -al"
+alias ls='ls -a'
+alias la='ls -a'
+alias ll='ls -al'
 # Confirmation
 alias mv='mv -i'
 alias cp='cp -i'
@@ -104,15 +99,15 @@ else
 	alias ls='ls -p -G'
 fi
 
-# Standard 8-color ANSI codes
-RED='\[\033[0;31m\]'
-GREEN='\[\033[0;32m\]'
-YELLOW='\[\033[0;33m\]'
-BLUE='\[\033[0;34m\]'
-MAGENTA='\[\033[0;35m\]'
-CYAN='\[\033[0;36m\]'
-WHITE='\[\033[0;37m\]'
-RESET='\[\033[0m\]'
+# Standard 8-color ANSI codes (for use outside PS1, without \[ \])
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+WHITE='\033[0;37m'
+RESET='\033[0m'
 
 # Set of Emojis
 CHECKMARK="✅"
@@ -124,10 +119,11 @@ DESTROY="💣"
 
 # Print a colorized diff
 colordiff() {
-    local red=$(tput setaf 1 2>/dev/null)
-    local green=$(tput setaf 2 2>/dev/null)
-    local cyan=$(tput setaf 6 2>/dev/null)
-    local reset=$(tput sgr0 2>/dev/null)
+    local red green cyan reset
+    red=$(tput setaf 1 2>/dev/null) || red=''
+    green=$(tput setaf 2 2>/dev/null) || green=''
+    cyan=$(tput setaf 6 2>/dev/null) || cyan=''
+    reset=$(tput sgr0 2>/dev/null) || reset=''
 
     # Use diff -u for unified diff
     diff -u "$@" | awk -v red="$red" -v green="$green" -v cyan="$cyan" -v reset="$reset" '
@@ -173,8 +169,8 @@ gmb() { # git main branch
 git_branch() {
     local branch
     branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
-    if [ -n "$branch" ]; then
-        echo " 🌿\[\033[0;32m\](${branch})"
+    if [[ -n $branch ]]; then
+        echo " 🌿\[\033[0;32m\]($branch)\[\033[0m\]"
     fi
 }
 # Open current git repo (or specific file) in GitHub in default browser
@@ -291,12 +287,13 @@ PROMPT_DIRTRIM=6
 
 # Show PATH with $HOME replaced by ~
 path_show() {
-    local p dir newpath=""
+    local -a p
+    local dir newpath=""
     IFS=: read -ra p <<< "$PATH"
     for dir in "${p[@]}"; do
         # Replace $HOME at the start with ~
-        if [[ $dir == $HOME* ]]; then
-            dir="~${dir#$HOME}"
+        if [[ $dir == "$HOME"* ]]; then
+            dir="~${dir#"$HOME"}"
         fi
         newpath+="$dir:"
     done
