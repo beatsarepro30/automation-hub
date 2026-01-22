@@ -12,7 +12,7 @@ dnf install -y dnf-plugins-core
 
 echo "=== Installing core CLI tools ==="
 dnf install -y \
-  git wget unzip tar nano vim tree jq htop fzf less which findutils rsync \
+  git wget unzip tar nano vim tree jq htop fzf fd-find less which findutils rsync \
   net-tools iproute bind-utils socat nmap-ncat
 
 echo "=== Setting Git credential helper ==="
