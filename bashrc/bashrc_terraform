@@ -251,3 +251,34 @@ tf_tail() {
     return 1
   fi
 }
+
+# Open current Terraform workspace in browser or print local message
+tfo() {
+  local ws url
+  ws=$(_get_workspace_name)
+  # Try to find a remote workspace URL in the latest log
+  local master_log latest_url
+  master_log=$(_get_master_log)
+  if [[ -f "$master_log" ]]; then
+    # Look for the most recent non-local URL
+    latest_url=$(grep -Eo 'https?://[^ ]+' "$master_log" | grep -i '\.com/app' | head -n 1)
+  fi
+  if [[ -n "$latest_url" ]]; then
+    echo "Opening remote Terraform workspace: $latest_url"
+    if command -v xdg-open &>/dev/null; then
+      xdg-open "$latest_url" &>/dev/null
+    elif command -v powershell.exe &> /dev/null; then
+      powershell.exe start "$latest_url"
+    elif command -v open &>/dev/null; then
+      open "$latest_url"
+    elif command -v start &>/dev/null; then
+      start "" "$latest_url"
+    else
+      echo "Could not detect a command to open a browser" >&2
+      return 1
+    fi
+  else
+    echo "This workspace appears to be local (no remote URL found for workspace '$ws')."
+  fi
+}
+
