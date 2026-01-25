@@ -262,6 +262,9 @@ tfo() {
   if [[ -f "$master_log" ]]; then
     # Look for the most recent non-local URL
     latest_url=$(grep -Eo 'https?://[^ ]+' "$master_log" | grep -i '\.com/app' | head -n 1)
+    latest_url=$(_strip_ansi_str "$latest_url")
+    # Strip /runs/* for workspace url
+    latest_url=$(echo "$latest_url" | sed -E 's|/runs/[^/?#]*.*||')
   fi
   if [[ -n "$latest_url" ]]; then
     echo "Opening remote Terraform workspace: $latest_url"
