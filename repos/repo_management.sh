@@ -62,14 +62,25 @@ done < "$REPOS_FILE"
 
 # Print paths using ~
 echo -n "Active repo paths: "
+
+# Normalize path to avoid double slashes (e.g., ~//path)
+normalize_path() {
+    local path="$1"
+    echo "$path" | sed -E 's#([^:])/+#\1/#g'
+}
+
 for p in "${ACTIVE_PATHS[@]}"; do
-    echo -n "$(print_path "$PARENT_DIR/$p") "
+    norm_path=$(normalize_path "$PARENT_DIR/$p")
+    echo -n "$(print_path "$norm_path") "
 done
 echo
 
 echo -n "Commented out repo paths: "
 for p in "${COMMENTED_PATHS[@]}"; do
-    [[ -n "$p" ]] && echo -n "$(print_path "$PARENT_DIR/$p") "
+    [[ -n "$p" ]] && {
+        norm_path=$(normalize_path "$PARENT_DIR/$p")
+        echo -n "$(print_path "$norm_path") "
+    }
 done
 echo
 
@@ -95,16 +106,31 @@ TMP_REPOS=$(mktemp)
 find_git_repos "$PARENT_DIR" > "$TMP_REPOS"
 
 while IFS= read -r repo_dir; do
-    relative_path=${repo_dir#"$PARENT_DIR/"}
+    # Compute relative path, handling the case where PARENT_DIR is ~/ (i.e., $HOME)
+    if [[ "$PARENT_DIR" == "$HOME"* ]]; then
+        # Remove $HOME/ prefix if present
+        if [[ "$repo_dir" == "$HOME/"* ]]; then
+            relative_path="${repo_dir#$HOME/}"
+        else
+            # fallback to removing PARENT_DIR prefix
+            relative_path="${repo_dir#"$PARENT_DIR/"}"
+        fi
+    else
+        relative_path="${repo_dir#"$PARENT_DIR/"}"
+    fi
 
     # Add new repos to repos.yml if not listed
     if [[ ! " ${ACTIVE_PATHS[*]} ${COMMENTED_PATHS[*]} " =~ " $relative_path " ]]; then
-        remote_url=$(git -C "$repo_dir" config --get remote.origin.url 2>/dev/null)
-        if [ -n "$remote_url" ]; then
-            echo "Adding new repo to config: $(print_path "$repo_dir") $remote_url"
-            echo "$relative_path $remote_url" >> "$REPOS_FILE"
+        remote_url=""
+        if remote_url=$(git -C "$repo_dir" config --get remote.origin.url 2>/dev/null); then
+            if [ -n "$remote_url" ]; then
+                echo "Adding new repo to config: $relative_path $remote_url"
+                echo "$relative_path $remote_url" >> "$REPOS_FILE"
+            else
+                echo "Warning: repo $relative_path has no remote URL, skipping addition to config"
+            fi
         else
-            echo "Warning: repo $(print_path "$repo_dir") has no remote URL, skipping addition to config"
+            echo "Warning: failed to get remote URL for repo $relative_path, skipping addition to config"
         fi
     fi
 
@@ -141,12 +167,13 @@ while IFS= read -r line || [ -n "$line" ]; do
 done < "$REPOS_FILE"
 
 # --- Remove any empty directories that do NOT contain .git ---
-echo "Removing empty directories (excluding git repos) under $(print_path "$PARENT_DIR")..."
-TMP_EMPTY=$(mktemp)
-find -L "$PARENT_DIR" -type d -empty > "$TMP_EMPTY"
-while IFS= read -r empty_dir; do
-    rmdir "$empty_dir" 2>/dev/null || true
-done < "$TMP_EMPTY"
-rm -f "$TMP_EMPTY"
+echo "Removing empty directories (excluding git repos) under $(print_path "$PARENT_DIR")"
+# find "$PARENT_DIR" -path '*/.git' -prune -o -type d -empty -delete
+find "$PARENT_DIR" \
+  -type d \
+  -name .git -prune \
+  -o \
+  -type d -empty \
+  -exec rmdir {} +
 
 echo "Cleanup complete!"
