@@ -80,10 +80,9 @@ alias h2="history 20"
 alias h3="history 30"
 alias hgrep='history | grep'
 # List commands
-alias l='ls -lAh'
-alias ls='ls -a'
+alias l='ls -lh'
 alias la='ls -a'
-alias ll='ls -al'
+alias ll='ls -lAh'
 # Confirmation
 alias mv='mv -i'
 alias cp='cp -i'
