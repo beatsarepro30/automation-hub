@@ -254,7 +254,7 @@ tf_tail() {
 
 # Open current Terraform workspace in browser or print local message
 tfo() {
-  local ws url
+  local ws
   ws=$(_get_workspace_name)
   # Try to find a remote workspace URL in the latest log
   local master_log latest_url
