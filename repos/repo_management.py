@@ -150,6 +150,16 @@ class RepoManager():
         with Path(self.repos_file_path).open("w", encoding="utf-8") as f:
             yaml.dump(self.repos_file_content, f)
 
+        # Create a symlink to the repos file from the parent directory
+        symlink_path = Path(self.parent_dir) / REPOS_FILE
+        try:
+            if symlink_path.exists() or symlink_path.is_symlink():
+                symlink_path.unlink()
+            symlink_path.symlink_to(Path(self.repos_file_path).resolve())
+            print(f"Created symlink to repos file at {symlink_path}")
+        except Exception as e:
+            print(f"Warning: failed to create symlink at {symlink_path}: {e}", file=sys.stderr)
+
 if __name__ == "__main__":
     manager = RepoManager()
     print(f"Using parent directory: {manager.parent_dir}")
