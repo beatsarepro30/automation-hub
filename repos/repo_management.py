@@ -94,7 +94,7 @@ class RepoManager():
         enabled_repos = {}
         disabled_repos = {}
 
-        if self.repos_file_content.get("repos") is not None:
+        if len(self.repos_file_content.get("repos", [])) > 0:
             for repo_name, repo_info in self.repos_file_content.get("repos").items():
                 if repo_info.get("enabled", True):
                     enabled_repos[repo_name] = repo_info
