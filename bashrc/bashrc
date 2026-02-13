@@ -265,7 +265,19 @@ extract() {
         *) echo "don’t know how to extract '$1'" ;;
     esac
 }
-
+secret() {
+    local name
+    read -p "Enter secret name: " name
+    if [[ -z $name ]]; then
+        echo "Secret name cannot be empty" >&2
+        return 1
+    fi
+    local value
+    read -sp "Enter secret value: " value
+    echo
+    export "$name=$value"
+    echo "Secret '$name' stored in environment variable."
+}
 
 #####################
 # Custom PS1 Prompt #

@@ -285,3 +285,10 @@ tfo() {
   fi
 }
 
+tf_update_commit() {
+    local commit_value
+    commit_value=$(date +"%Y_%b_%d-%H_%M_%S")
+    echo "commit = \"$commit_value\"" > terraform.auto.tfvars
+    echo "Set commit variable in terraform.auto.tfvars to: $commit_value"
+}
+alias tfuc='tf_update_commit'
