@@ -1,23 +1,29 @@
+# Default configuration file should be named config.yml unless otherwise specified as an argument 
+
+# List of repos that can be seleced. 
+# The repo alias is the key (e.g. auto-hub).
 repos:
-  default:
+  auto-hub:
     owner: beatsarepro30
     repo: automation-hub
-    default_ref: main
+    workflow: testbed # Optional key to specify which workflow should be triggered for this repo
 
-# Workflow-scoped token (preferred env: GITHUB_TOKEN). Fallback key: workflow_token or token
-workflow_token: ""
+# Workflow-scoped token (preferred env: GITHUB_TOKEN). Fallback key: workflow_token
+workflow_token: null
 
-# Repo-scoped token used for approval endpoints (preferred env: GITHUB_REPO_TOKEN). Fallback key: repo_token
-repo_token: ""
+# Repo-scoped token used for approval endpoints (preferred env: GITHUB_REPO_TOKEN). Fallback key: $GITHUB_TOKEN then repo_token
+repo_token: null
 
+# List of workflows that can be selected.
+# The workflow alias is the key (e.g. testbed).
 workflows:
-  default:
+  testbed:
     name: workflow testbed
     file: workflow-testbed.yml
-    ref: main
     inputs:
-      message: Hello from python script
+      message: "Hello World" # Null value will ask for input at runtime
       should_fail: "false"
+    ref: feature/test # Optional key to specify the workflow reference (branch, tag, or commit). If not provided, defaults to main
     auto_approve: True
     auto_approve_env_names:
       - test

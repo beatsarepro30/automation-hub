@@ -23,80 +23,85 @@ from typing import Any, Dict, Optional
 import requests
 import yaml
 
+from dotenv import load_dotenv
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 logger = logging.getLogger("gh-wf-runner")
 
 # ----------------------
 # Config class with repo alias support
 # ----------------------
-@dataclass
-class Config:
-    owner: str
-    repo: str
-    default_ref: str = "main"
-    # workflow-scoped token (previously "token")
-    token: Optional[str] = None
-    token_env: str = "GITHUB_TOKEN"
-    # repo-scoped token used for approve APIs
-    repo_token: Optional[str] = None
-    repo_token_env: str = "GITHUB_REPO_TOKEN"
-    workflow: Dict[str, Any] = None
-    poll_interval_seconds: int = 5
+class Config():
+    def __init__(self, repo, workflow, config_path: str = "config.yml"):
+        self.config_path = config_path
+        self.repo = repo
+        self.workflow = workflow
+        self.poll_interval_seconds = 5
+        self.load()
 
-    @staticmethod
-    def load(path: Optional[str] = None, alias: Optional[str] = None, workflow_alias: Optional[str] = None) -> "Config":
+    def load(self):
         """Load YAML config and apply alias resolution."""
-        data: Dict[str, Any] = {}
+        try:
+            with open(self.config_path, "r", encoding="utf-8") as f:
+                config_content = yaml.safe_load(f) or {}
+        except FileNotFoundError:
+            logger.error(f"Config file '{self.config_path}' not found.")
+            raise
 
-        if path:
-            with open(path, "r", encoding="utf-8") as f:
-                data = yaml.safe_load(f) or {}
+        repos_data = config_content.get("repos", {})
+        if repos_data is None:
+            raise ValueError("Repos key must be provided in config and cannot be null")
 
-        # -------- repo alias support --------
-        repos = data.get("repos", {})
-        if not alias:
-            raise ValueError("Repo alias must be provided")
-        if alias not in repos:
-            raise ValueError(f"Repo alias '{alias}' not found in config.repos")
-        repo_cfg = repos[alias]
+        # `self.repo` initially holds the repo key from args; keep it as repo_key
+        repo_key = self.repo
+        self.repo_data = repos_data.get(repo_key, None)
+        if self.repo_data is None:
+            raise ValueError(f"Repo key '{repo_key}' not found in config.repos")
 
-        owner = repo_cfg.get("owner") or os.getenv("GITHUB_OWNER")
-        repo = repo_cfg.get("repo") or os.getenv("GITHUB_REPO")
-        if not owner or not repo:
-            raise ValueError("Missing owner/repo (from alias block or env)")
+        self.owner = self.repo_data.get("owner", None)
+        self.repo_name = self.repo_data.get("repo", None)
+        if self.owner is None or self.repo_name is None:
+            raise ValueError(f"Missing owner/repo from repo {repo_key}")
 
-        workflows_raw = data.get("workflows")
-        if not workflow_alias:
-            raise ValueError("Workflow alias must be provided")
-        if workflow_alias not in workflows_raw:
-            raise ValueError(f"Workflow alias '{workflow_alias}' not found in config.workflows")
-        workflow_cfg = workflows_raw[workflow_alias]
+        workflows = config_content.get("workflows", None)
+        if workflows is None:
+            raise ValueError(f"Workflows key not found in config")
 
-        # Token precedence for workflow token: environment (GITHUB_TOKEN or WORKFLOW_TOKEN)
-        workflow_token = os.getenv("GITHUB_TOKEN")
-        workflow_token_env = "GITHUB_TOKEN"
-        if not workflow_token:
-            workflow_token = data.get("workflow_token") or data.get("token")
-            workflow_token_env = "local"
+        # `self.workflow` initially holds the workflow key from args
+        workflow_key = self.workflow
+        self.workflow = workflows.get(workflow_key, None)
+        if self.workflow is None:
+            raise ValueError(f"Workflow key '{workflow_key}' not found in config.workflows")
 
-        repo_token = os.getenv("GITHUB_REPO_TOKEN")
-        repo_token_env = "GITHUB_REPO_TOKEN"
-        if not repo_token:
-            repo_token = data.get("repo_token")
-            if repo_token:
-                repo_token_env = "local"
+        # Tokens: prefer env, fallback to config
+        self.workflow_token = os.getenv("GITHUB_TOKEN")
+        if not self.workflow_token:
+            self.workflow_token = config_content.get("workflow_token", None)
+        if not self.workflow_token:
+            raise ValueError("No workflow token found in environment variable GITHUB_TOKEN or config key workflow_token")
 
-        return Config(
-            owner=owner,
-            repo=repo,
-            default_ref=workflow_cfg.get("ref") or repo_cfg.get("default_ref", "main"),
-            token=workflow_token,
-            token_env=workflow_token_env,
-            repo_token=repo_token,
-            repo_token_env=repo_token_env,
-            workflow=workflow_cfg,
-            poll_interval_seconds=int(data.get("poll_interval_seconds", 5)),
-        )
+        self.repo_token = os.getenv("GITHUB_REPO_TOKEN")
+        if not self.repo_token:
+            self.repo_token = os.getenv("GITHUB_TOKEN")  # fallback to GITHUB_TOKEN for repo token if specific one not set
+        if not self.repo_token:
+            self.repo_token = config_content.get("repo_token", None)
+        if not self.repo_token:
+            raise ValueError("No repo token found in environment variables GITHUB_REPO_TOKEN or GITHUB_TOKEN, or config key repo_token")
+
+        self.default_ref = "main"
+
+        self.token = self.workflow_token
+        if os.getenv("GITHUB_TOKEN"):
+            self.token_env = "GITHUB_TOKEN"
+        else:
+            self.token_env = "config.workflow_token" if config_content.get("workflow_token") else None
+
+        self.repo_token = self.repo_token
+        if os.getenv("GITHUB_REPO_TOKEN"):
+            self.repo_token_env = "GITHUB_REPO_TOKEN"
+        elif os.getenv("GITHUB_TOKEN"):
+            self.repo_token_env = "GITHUB_TOKEN"
+        else:
+            self.repo_token_env = "config.repo_token" if config_content.get("repo_token") else None
 
 # ----------------------
 # GitHub Actions client
@@ -143,7 +148,7 @@ class GitHubActionsClient:
 
     def get_workflow_id_by_filename(self, workflow_file: str) -> Optional[int]:
         """Given a workflow file name (e.g., ci.yml), return its numeric workflow ID."""
-        url = f"{self.API_ROOT}/repos/{self.config.owner}/{self.config.repo}/actions/workflows"
+        url = f"{self.API_ROOT}/repos/{self.config.owner}/{self.config.repo_name}/actions/workflows"
         r = self.get_session("workflow").get(url)
         if r.status_code != 200:
             logger.error(f"Failed to list workflows: {r.status_code} {r.text}")
@@ -154,7 +159,7 @@ class GitHubActionsClient:
                 workflow_id = wf.get("id")
                 logger.info(f"Resolved workflow file '{workflow_file}' to ID {workflow_id}")
                 return workflow_id
-        logger.error(f"Workflow file '{workflow_file}' not found in repo {self.config.owner}/{self.config.repo}")
+        logger.error(f"Workflow file '{workflow_file}' not found in repo {self.config.owner}/{self.config.repo_name}")
         return None
 
     def trigger_workflow(self, workflow_file: str, ref: str, inputs: Optional[Dict[str, Any]] = None) -> Optional[int]:
@@ -166,11 +171,11 @@ class GitHubActionsClient:
             if not workflow_file:
                 raise RuntimeError("Cannot resolve workflow ID from file name.")
 
-        url = f"{self.API_ROOT}/repos/{self.config.owner}/{self.config.repo}/actions/workflows/{workflow_file}/dispatches"
+        url = f"{self.API_ROOT}/repos/{self.config.owner}/{self.config.repo_name}/actions/workflows/{workflow_file}/dispatches"
         payload = {"ref": ref}
         if inputs:
             payload["inputs"] = inputs
-        logger.info(f"Dispatching workflow '{workflow_file}' on {self.config.owner}/{self.config.repo} (ref={ref})")
+        logger.info(f"Dispatching workflow '{workflow_file}' on {self.config.owner}/{self.config.repo_name} (ref={ref})")
         r = self.get_session("workflow").post(url, json=payload)
         if r.status_code not in (201, 204):
             logger.error(f"Failed to dispatch workflow: {r.status_code} {r.text}")
@@ -193,7 +198,7 @@ class GitHubActionsClient:
             time.sleep(self.config.poll_interval_seconds)
 
     def _find_latest_run_for_workflow(self, workflow_file: str, ref: str) -> Optional[Dict[str, Any]]:
-        url = f"{self.API_ROOT}/repos/{self.config.owner}/{self.config.repo}/actions/workflows/{workflow_file}/runs"
+        url = f"{self.API_ROOT}/repos/{self.config.owner}/{self.config.repo_name}/actions/workflows/{workflow_file}/runs"
         r = self.get_session("workflow").get(url, params={"per_page": 10})
         if r.status_code != 200:
             logger.warning(f"Failed to list workflow runs: {r.status_code} {r.text}")
@@ -206,7 +211,7 @@ class GitHubActionsClient:
         return runs[0] if runs else None
 
     def get_run(self, run_id: int) -> Dict[str, Any]:
-        url = f"{self.API_ROOT}/repos/{self.config.owner}/{self.config.repo}/actions/runs/{run_id}"
+        url = f"{self.API_ROOT}/repos/{self.config.owner}/{self.config.repo_name}/actions/runs/{run_id}"
         r = self.get_session("workflow").get(url)
         r.raise_for_status()
         return r.json()
@@ -214,7 +219,7 @@ class GitHubActionsClient:
     # NEW: list jobs for a workflow run
     def list_jobs_for_run(self, run_id: int) -> list:
         """Return list of jobs for the given workflow run. Best-effort; returns [] on error."""
-        url = f"{self.API_ROOT}/repos/{self.config.owner}/{self.config.repo}/actions/runs/{run_id}/jobs"
+        url = f"{self.API_ROOT}/repos/{self.config.owner}/{self.config.repo_name}/actions/runs/{run_id}/jobs"
         r = self.get_session("workflow").get(url, params={"per_page": 100})
         if r.status_code != 200:
             logger.warning("Failed to list jobs for run %s: %s %s", run_id, r.status_code, r.text)
@@ -228,7 +233,7 @@ class GitHubActionsClient:
         Use repo session if available (it may have visibility), otherwise fall back to workflow session.
         Best-effort: returns [] on error or if endpoint not available.
         """
-        url = f"{self.API_ROOT}/repos/{self.config.owner}/{self.config.repo}/actions/runs/{run_id}/pending_deployments"
+        url = f"{self.API_ROOT}/repos/{self.config.owner}/{self.config.repo_name}/actions/runs/{run_id}/pending_deployments"
         try:
             # prefer repo session to ensure visibility/permissions, fallback inside get_session
             r = self.get_session("repo").get(url)
@@ -297,7 +302,7 @@ class GitHubActionsClient:
             if allowed_to_approve and self.config.repo_token:
                 # Build payload exactly as required by API
                 payload = {"environment_ids": allowed_to_approve, "state": "approved", "comment": comment}
-                url = f"{self.API_ROOT}/repos/{self.config.owner}/{self.config.repo}/actions/runs/{run_id}/pending_deployments"
+                url = f"{self.API_ROOT}/repos/{self.config.owner}/{self.config.repo_name}/actions/runs/{run_id}/pending_deployments"
                 try:
                     r = self.get_session("repo").post(url, json=payload)
                 except requests.RequestException as ex:
@@ -354,11 +359,11 @@ class GitHubActionsClient:
         if name in self._env_name_cache:
             return self._env_name_cache[name]
 
-        url = f"{self.API_ROOT}/repos/{self.config.owner}/{self.config.repo}/environments"
+        url = f"{self.API_ROOT}/repos/{self.config.owner}/{self.config.repo_name}/environments"
         try:
             r = self.get_session("repo").get(url, params={"per_page": 100})
         except requests.RequestException as ex:
-            logger.warning("Exception listing environments for repo %s/%s: %s", self.config.owner, self.config.repo, ex)
+            logger.warning("Exception listing environments for repo %s/%s: %s", self.config.owner, self.config.repo_name, ex)
             self._env_name_cache[name] = None
             return None
 
@@ -377,7 +382,7 @@ class GitHubActionsClient:
                 break
 
         if found_id is None:
-            logger.warning("Environment name '%s' not found in repo %s/%s", name, self.config.owner, self.config.repo)
+            logger.warning("Environment name '%s' not found in repo %s/%s", name, self.config.owner, self.config.repo_name)
         else:
             logger.info("Resolved environment name '%s' -> id %s", name, found_id)
 
@@ -392,7 +397,7 @@ class GitHubActionsClient:
             if eid == env_id:
                 return name
         # Populate cache by listing environments
-        url = f"{self.API_ROOT}/repos/{self.config.owner}/{self.config.repo}/environments"
+        url = f"{self.API_ROOT}/repos/{self.config.owner}/{self.config.repo_name}/environments"
         try:
             r = self.get_session("repo").get(url, params={"per_page": 100})
         except requests.RequestException as ex:
@@ -504,26 +509,38 @@ class Runner:
 # ----------------------
 def build_arg_parser():
     p = argparse.ArgumentParser(description="Trigger a single GitHub Actions workflow")
-    p.add_argument("--config", "-c", help="Path to YAML config file (optional)")
-    p.add_argument("--repo-alias", "-r", required=True, help="Repo alias defined in config.repos (required)")
-    p.add_argument("--workflow-alias", "-w", required=True, help="Workflow alias defined in config.workflows (required)")
+    p.add_argument("--repo", "-r", required=True, help="Repo defined in config.repos (required)")
+    p.add_argument("--workflow", "-w", required=True, help="Workflow defined in config.workflows (required)")
+    p.add_argument("--config", "-c", default="config.yml", help="Path to YAML config file (optional)")
     p.add_argument("--yes", "-y", action="store_true", help="Skip confirmation prompt and proceed immediately")
     return p
 
 def main(argv=None):
     parser = build_arg_parser()
     args = parser.parse_args(argv)
+    # Load .env early so Config can pick up tokens from environment variables.
     try:
-        config = Config.load(args.config, alias=args.repo_alias, workflow_alias=args.workflow_alias)
+        load_dotenv()
+        logger.debug("Loaded .env via python-dotenv")
+    except Exception as ex:
+        logger.warning("Failed to load .env via python-dotenv: %s", ex)
+    try:
+        config = Config(config_path=args.config, repo=args.repo, workflow=args.workflow)
         # Interactive confirmation step: show a brief summary and ask the user to proceed.
         if not getattr(args, "yes", False):
             # If not a TTY, avoid blocking on input
             if not sys.stdin.isatty():
                 logger.error("Non-interactive session detected and --yes/-y not provided. Aborting to avoid blocking.")
                 sys.exit(1)
+            # Iterate through inputs and replace any null values with a prompt for user input
+            if config.workflow.get("inputs"):
+                for k, v in config.workflow["inputs"].items():
+                    if v is None:
+                        user_val = input(f"Enter value for workflow input '{k}': ")
+                        config.workflow["inputs"][k] = user_val
             summary = {
                 "owner": config.owner,
-                "repo": config.repo,
+                "repo": config.repo_name,
                 "workflow": config.workflow.get("file"),
                 "ref": config.workflow.get("ref") or config.default_ref,
                 "inputs": config.workflow.get("inputs", {}),

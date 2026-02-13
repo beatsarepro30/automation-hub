@@ -1,6 +1,8 @@
 config.sh
 **/config.sh
 cron/my_cron_jobs*
+config.yml
+.env
 
 # Repo Management
 repos.yml
